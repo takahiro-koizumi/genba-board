@@ -764,6 +764,10 @@
   }
   body.filter-jp .magnet[data-kind="trainee"] { display: none !important; }
   body.filter-trainee .magnet[data-type="person"]:not([data-kind="trainee"]) { display: none !important; }
+  body.filter-vehicle .magnet[data-type="person"],
+  body.filter-vehicle .magnet[data-type="equipment"] { display: none !important; }
+  body.filter-vehicle .cell-headcount,
+  body.filter-vehicle .day-total { display: none !important; }
 
   /* ===== Filter button group ===== */
   .filter-group {
@@ -999,6 +1003,7 @@
       <button data-filter="all" class="active" onclick="setViewFilter('all')">全体</button>
       <button data-filter="jp" onclick="setViewFilter('jp')">日本人</button>
       <button data-filter="trainee" onclick="setViewFilter('trainee')">実習生</button>
+      <button data-filter="vehicle" onclick="setViewFilter('vehicle')">車両</button>
     </div>
     <button onclick="openListView()">📋 一覧</button>
     <div class="spacer"></div>
@@ -1454,6 +1459,7 @@ function render() {
 function applyFilterClass() {
   document.body.classList.toggle('filter-jp', state.viewFilter === 'jp');
   document.body.classList.toggle('filter-trainee', state.viewFilter === 'trainee');
+  document.body.classList.toggle('filter-vehicle', state.viewFilter === 'vehicle');
 }
 
 function updateFilterButtons() {
