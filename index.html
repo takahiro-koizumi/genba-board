@@ -1,0 +1,2856 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="配置ボード">
+<meta name="theme-color" content="#2b3a4a">
+<link rel="manifest" href="./manifest.json">
+<link rel="icon" type="image/svg+xml" href="./icon.svg">
+<link rel="apple-touch-icon" href="./icon.svg">
+<title>現場配置ボード</title>
+<script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+
+  html, body {
+    height: 100%;
+    overflow: hidden;
+    font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Yu Gothic UI", "Meiryo", sans-serif;
+    background: #ecebe4;
+    color: #222;
+    user-select: none;
+    -webkit-user-select: none;
+    font-size: 14px;
+  }
+
+  .app {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+  }
+
+  /* ===== Toolbar ===== */
+  .toolbar {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 12px;
+    background: #2b3a4a;
+    color: white;
+    flex-shrink: 0;
+    flex-wrap: wrap;
+  }
+  .toolbar h1 { font-size: 16px; margin-right: 12px; white-space: nowrap; }
+  .toolbar .spacer { flex: 1; }
+  .toolbar button {
+    padding: 8px 12px;
+    border: 1px solid rgba(255,255,255,0.3);
+    background: rgba(255,255,255,0.1);
+    color: white;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 13px;
+    min-height: 36px;
+    white-space: nowrap;
+  }
+  .toolbar button:active { background: rgba(255,255,255,0.25); }
+  .toolbar button.primary {
+    background: #ff6b6b;
+    border-color: #ff6b6b;
+    font-weight: bold;
+  }
+  .toolbar button.primary.active {
+    background: #ffd93d;
+    color: #222;
+    border-color: #ffd93d;
+  }
+
+  /* ===== Main layout ===== */
+  .main {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+  }
+  .grid-wrap {
+    flex: 1;
+    overflow: auto;
+    background: #fff;
+    position: relative;
+  }
+  .pool {
+    width: 220px;
+    background: #f5f4ec;
+    border-left: 1px solid #ccc;
+    display: flex;
+    flex-direction: column;
+    flex-shrink: 0;
+  }
+
+  /* ===== Grid ===== */
+  .grid {
+    display: grid;
+    grid-template-columns: 180px repeat(7, minmax(130px, 1fr)) 130px;
+    min-width: 1200px;
+  }
+  .site-row {
+    display: grid;
+    grid-template-columns: subgrid;
+    grid-column: 1 / -1;
+  }
+  .site-row.dragging { opacity: 0.6; }
+  .site-drag-handle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 18px;
+    height: 26px;
+    margin-right: 4px;
+    color: #aaa;
+    cursor: grab;
+    font-size: 14px;
+    user-select: none;
+    flex-shrink: 0;
+    letter-spacing: -2px;
+  }
+  .site-drag-handle:hover, .site-drag-handle:active {
+    color: #555;
+    background: rgba(0,0,0,0.06);
+    border-radius: 3px;
+  }
+  .site-drag-handle:active { cursor: grabbing; }
+  .site-copy-handle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    font-size: 12px;
+    cursor: copy;
+    user-select: none;
+    flex-shrink: 0;
+    border-radius: 3px;
+    background: rgba(0,0,0,0.05);
+    margin-right: 4px;
+    border: 0;
+    padding: 0;
+    line-height: 1;
+  }
+  .site-copy-handle:hover { background: rgba(255,202,40,0.4); }
+  .site-copy-handle:active { background: rgba(255,202,40,0.7); cursor: grabbing; }
+
+  /* Copy drag visual */
+  .copy-drag-ghost {
+    position: fixed;
+    pointer-events: none;
+    z-index: 9999;
+    background: linear-gradient(180deg, #fff59d 0%, #fff176 100%);
+    border: 2px solid #f9a825;
+    border-radius: 6px;
+    padding: 6px 12px;
+    font-size: 13px;
+    font-weight: bold;
+    color: #333;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.35);
+    white-space: nowrap;
+  }
+  .copy-drop-zone {
+    outline: 2px dashed #2563eb !important;
+    outline-offset: -2px;
+    background-color: rgba(37,99,235,0.06) !important;
+  }
+  .copy-drop-active {
+    outline: 3px solid #2563eb !important;
+    background-color: rgba(37,99,235,0.22) !important;
+  }
+  .head {
+    background: #f8f8f4;
+    font-weight: bold;
+    text-align: center;
+    padding: 8px 4px;
+    border: 1px solid #d4d2c4;
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    line-height: 1.2;
+  }
+  .head.site-head { left: 0; z-index: 30; }
+  .day-name { font-size: 13px; }
+  .day-num { font-size: 22px; }
+  .day-name.sun, .day-num.sun { color: #d33; }
+  .day-name.sat, .day-num.sat { color: #2563eb; }
+  .head { position: sticky; top: 0; }
+  .day-copy-btn {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    width: 26px;
+    height: 26px;
+    font-size: 13px;
+    border: 1px solid #d4d2c4;
+    background: white;
+    border-radius: 4px;
+    cursor: pointer;
+    padding: 0;
+    line-height: 1;
+  }
+  .day-copy-btn:hover, .day-copy-btn:active {
+    background: #ffe25a;
+    border-color: #aaa;
+  }
+  .day-copy-row {
+    display: flex;
+    align-items: center;
+    padding: 6px 4px;
+    border-bottom: 1px solid #eee;
+  }
+  .day-copy-row:hover { background: #f4f4f0; }
+  .day-copy-row input[type="checkbox"] { margin-right: 8px; transform: scale(1.2); }
+  .day-copy-row .label { flex: 1; font-size: 13px; }
+  .day-copy-row .label.sun { color: #d33; }
+  .day-copy-row .label.sat { color: #2563eb; }
+  .day-copy-mode {
+    display: flex;
+    gap: 12px;
+    padding: 8px 0;
+    border-top: 1px solid #eee;
+    margin-top: 8px;
+  }
+  .day-copy-mode label {
+    display: flex;
+    align-items: center;
+    font-size: 13px;
+    cursor: pointer;
+  }
+  .day-copy-mode input[type="radio"] { margin-right: 4px; }
+
+  .site-name {
+    background: #f8f8f4;
+    border: 1px solid #d4d2c4;
+    padding: 6px 8px;
+    position: sticky;
+    left: 0;
+    z-index: 10;
+    display: flex;
+    align-items: center;
+    min-height: 90px;
+    line-height: 1.3;
+    --period-color: #666;
+    cursor: pointer;
+  }
+  .site-name.has-color { cursor: pointer; }
+  .site-name-inner {
+    font-size: 12.5px;
+    flex: 1;
+    word-break: break-all;
+    outline: none;
+  }
+  .site-name .period {
+    display: block;
+    font-size: 10.5px;
+    color: var(--period-color);
+    margin-top: 2px;
+  }
+  .site-del {
+    display: none;
+    margin-left: 4px;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: #d33;
+    color: white;
+    border: 0;
+    font-weight: bold;
+    font-size: 14px;
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+  body.edit-mode .site-del { display: inline-flex; align-items: center; justify-content: center; }
+  body.edit-mode .site-name-inner { background: #fff8dc; padding: 2px 4px; border-radius: 3px; }
+
+  .cell {
+    background: white;
+    border: 1px solid #e2e0d2;
+    padding: 4px;
+    min-height: 90px;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    position: relative;
+  }
+  .cell-copy-handle {
+    position: absolute;
+    top: 2px;
+    right: 2px;
+    width: 20px;
+    height: 20px;
+    font-size: 10px;
+    background: rgba(255,255,255,0.85);
+    border: 1px solid rgba(0,0,0,0.12);
+    border-radius: 3px;
+    cursor: copy;
+    z-index: 3;
+    padding: 0;
+    line-height: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+  @media (hover: hover) {
+    .cell-copy-handle { opacity: 0; transition: opacity 0.15s; }
+    .cell:hover .cell-copy-handle { opacity: 0.9; }
+  }
+  @media (hover: none) {
+    .cell-copy-handle { opacity: 0.45; }
+  }
+  .cell-copy-handle:hover, .cell-copy-handle:active {
+    opacity: 1 !important;
+    background: #fff59d;
+    border-color: #f9a825;
+  }
+  .cell-copy-handle:active { cursor: grabbing; }
+  .cell-headcount {
+    position: absolute;
+    top: 1px;
+    left: 1px;
+    font-size: 9px;
+    background: #2b3a4a;
+    color: white;
+    padding: 0 4px;
+    border-radius: 7px;
+    font-weight: bold;
+    z-index: 2;
+    pointer-events: none;
+    height: 14px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 14px;
+    line-height: 1;
+  }
+  .day-total {
+    display: block;
+    font-size: 11px;
+    color: #2b3a4a;
+    margin-top: 2px;
+    font-weight: bold;
+  }
+  .day-total.zero { color: #aaa; font-weight: normal; }
+
+  /* ===== Dropbox status & settings ===== */
+  .dbx-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+    color: white;
+    background: rgba(255,255,255,0.1);
+    border: 1px solid rgba(255,255,255,0.2);
+  }
+  .dbx-status.connected { background: #16a34a; border-color: #15803d; }
+  .dbx-status.syncing { background: #2563eb; border-color: #1d4ed8; }
+  .dbx-status.error { background: #dc2626; border-color: #b91c1c; }
+  .dbx-status .dot {
+    width: 7px; height: 7px; border-radius: 50%;
+    background: currentColor;
+  }
+  .settings-modal .modal { min-width: 420px; max-width: 90vw; }
+  .settings-section {
+    padding: 12px 0;
+    border-bottom: 1px solid #eee;
+  }
+  .settings-section h3 {
+    font-size: 13px;
+    margin-bottom: 8px;
+    color: #333;
+  }
+  .settings-section p {
+    font-size: 12px;
+    color: #666;
+    margin-bottom: 8px;
+    line-height: 1.5;
+  }
+  .settings-row {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    margin: 6px 0;
+  }
+  .settings-row input[type="text"], .settings-row input[type="password"] {
+    flex: 1;
+    padding: 6px 8px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-size: 13px;
+    font-family: monospace;
+  }
+  .settings-row button {
+    padding: 6px 12px;
+    border: 1px solid #ccc;
+    background: white;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 13px;
+    white-space: nowrap;
+  }
+  .settings-row button.primary { background: #2563eb; color: white; border-color: #2563eb; }
+  .settings-row button.danger { background: #dc2626; color: white; border-color: #dc2626; }
+  .settings-help {
+    background: #f0f8ff;
+    border: 1px solid #b8d4f0;
+    border-radius: 4px;
+    padding: 8px 10px;
+    font-size: 11.5px;
+    color: #333;
+    margin-top: 6px;
+    line-height: 1.6;
+  }
+  .settings-help ol { padding-left: 18px; }
+  .settings-help code {
+    background: rgba(0,0,0,0.06);
+    padding: 1px 4px;
+    border-radius: 2px;
+    font-size: 11px;
+  }
+  .last-sync { font-size: 11px; color: #888; margin-top: 4px; }
+  .row-1 .cell, .row-1 .site-name { background: #fffefa; }
+
+  .magnet-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 3px;
+    align-content: flex-start;
+    min-height: 28px;
+    flex: 1;
+  }
+  .cell-note {
+    font-size: 11px;
+    color: #444;
+    padding: 3px 4px;
+    min-height: 18px;
+    border-radius: 3px;
+    border: 1px dashed transparent;
+    outline: none;
+    word-break: break-all;
+    line-height: 1.3;
+  }
+  .cell-note:empty::before {
+    content: '';
+  }
+  .cell-note:focus {
+    border-color: #2563eb;
+    background: #eff6ff;
+  }
+  body.edit-mode .cell-note {
+    border-color: #ddd;
+  }
+
+  /* ===== Magnet ===== */
+  .magnet {
+    display: inline-flex;
+    align-items: center;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 12px;
+    font-weight: 700;
+    line-height: 1;
+    cursor: grab;
+    touch-action: none;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.15);
+    white-space: nowrap;
+    position: relative;
+    min-height: 26px;
+  }
+  .magnet:active { cursor: grabbing; }
+  .magnet[data-type="person"] { background: linear-gradient(180deg, #ff7373 0%, #e94747 100%); color: white; }
+  .magnet[data-type="equipment"] { background: linear-gradient(180deg, #ffe25a 0%, #f5c518 100%); color: #222; }
+  .magnet[data-type="vehicle"] { background: linear-gradient(180deg, #fff 0%, #e8e8e8 100%); color: #222; border: 1px solid #999; }
+  .magnet .del {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    margin-left: 5px;
+    width: 15px;
+    height: 15px;
+    line-height: 1;
+    border-radius: 50%;
+    background: rgba(0,0,0,0.35);
+    color: white;
+    font-size: 10px;
+    font-weight: bold;
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+  .magnet .del:hover, .magnet .del:active {
+    background: rgba(220,53,69,0.85);
+  }
+  .sortable-ghost { opacity: 0.4; }
+  .sortable-chosen { transform: scale(1.05); }
+  .sortable-drag { box-shadow: 0 4px 12px rgba(0,0,0,0.3) !important; }
+
+  /* ===== Pool ===== */
+  .pool-tabs {
+    display: flex;
+    background: #e0ddd0;
+    flex-shrink: 0;
+  }
+  .pool-tab {
+    flex: 1;
+    padding: 10px 4px;
+    text-align: center;
+    cursor: pointer;
+    font-size: 13px;
+    border-bottom: 3px solid transparent;
+    font-weight: 600;
+  }
+  .pool-tab.active { background: #f5f4ec; border-bottom-color: #2b3a4a; }
+
+  .pool-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 8px;
+  }
+  .pool-items {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    min-height: 100px;
+    padding: 4px;
+    background: rgba(0,0,0,0.03);
+    border-radius: 6px;
+  }
+  .pool-section-header {
+    width: 100%;
+    font-size: 11px;
+    font-weight: bold;
+    color: #555;
+    padding: 4px 2px 3px;
+    margin-top: 6px;
+    border-bottom: 1px solid #ccc;
+    background: transparent;
+  }
+  .pool-section-header:first-child { margin-top: 0; }
+  .pool-section-header .count {
+    font-weight: normal;
+    color: #999;
+    margin-left: 4px;
+    font-size: 10px;
+  }
+  .pool .add-btn {
+    margin-top: 10px;
+    padding: 10px;
+    width: 100%;
+    border: 2px dashed #999;
+    background: transparent;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 13px;
+    color: #555;
+  }
+  .pool .add-btn:active { background: rgba(0,0,0,0.05); }
+
+  /* ===== Modal ===== */
+  .modal-bg {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.5);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+  }
+  .modal-bg.show { display: flex; }
+  .modal {
+    background: white;
+    border-radius: 8px;
+    padding: 20px;
+    min-width: 320px;
+    max-width: 90vw;
+  }
+  .modal h2 { margin-bottom: 12px; font-size: 16px; }
+  .modal input {
+    width: 100%;
+    padding: 10px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-size: 14px;
+    margin-bottom: 8px;
+  }
+  .modal-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 12px;
+    justify-content: flex-end;
+  }
+  .modal button {
+    padding: 10px 16px;
+    border-radius: 4px;
+    border: 1px solid #ccc;
+    background: white;
+    cursor: pointer;
+    font-size: 14px;
+  }
+  .modal button.primary { background: #2563eb; color: white; border-color: #2563eb; }
+  .modal button.danger { background: #d33; color: white; border-color: #d33; }
+
+  /* Color picker */
+  .color-target {
+    text-align: center;
+    margin: 8px 0 16px;
+    font-size: 13px;
+    color: #555;
+  }
+  .color-target .preview-magnet {
+    display: inline-flex;
+    align-items: center;
+    padding: 6px 12px;
+    border-radius: 4px;
+    font-size: 14px;
+    font-weight: 700;
+    margin-left: 8px;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.15);
+  }
+  .color-grid {
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    gap: 6px;
+    margin: 8px 0 12px;
+  }
+  .color-swatch {
+    aspect-ratio: 1;
+    border-radius: 6px;
+    cursor: pointer;
+    border: 2px solid rgba(0,0,0,0.1);
+    position: relative;
+    min-width: 36px;
+    min-height: 36px;
+  }
+  .color-swatch:active { transform: scale(0.92); }
+  .color-swatch.selected {
+    border-color: #2563eb;
+    border-width: 3px;
+    box-shadow: 0 0 0 2px white inset;
+  }
+  .color-custom-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 0;
+    border-top: 1px solid #eee;
+    margin-top: 8px;
+  }
+  .color-custom-row input[type="color"] {
+    width: 44px;
+    height: 34px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    padding: 2px;
+    cursor: pointer;
+  }
+  .color-custom-row label { font-size: 13px; color: #555; flex: 1; }
+
+  /* ===== Meta info table in modal ===== */
+  .meta-info {
+    background: #f6f5ec;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    padding: 8px 10px;
+    margin-bottom: 12px;
+    font-size: 13px;
+  }
+  .meta-info table { width: 100%; border-collapse: collapse; }
+  .meta-info td { padding: 3px 0; vertical-align: top; line-height: 1.4; }
+  .meta-info td.k { color: #666; width: 70px; font-size: 12px; }
+  .meta-info td.v { font-weight: bold; word-break: break-all; }
+  .meta-info .note {
+    margin-top: 4px;
+    padding: 3px 6px;
+    background: #fff3cd;
+    border-radius: 3px;
+    color: #856404;
+    font-size: 11px;
+    display: inline-block;
+  }
+
+  /* Name edit row in modal */
+  .name-edit-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 0 10px;
+    border-bottom: 1px solid #eee;
+    margin-bottom: 10px;
+  }
+  .name-edit-row label {
+    font-size: 12px;
+    color: #666;
+    white-space: nowrap;
+  }
+  .name-edit-row input {
+    flex: 1;
+    padding: 6px 8px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-size: 14px;
+  }
+  .name-edit-row .save-btn {
+    padding: 6px 10px;
+    background: #2563eb;
+    color: white;
+    border: 0;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 12px;
+  }
+  .name-edit-row .save-btn:disabled {
+    background: #ccc;
+    cursor: not-allowed;
+  }
+
+  /* ===== Trainee shape ===== */
+  .magnet[data-kind="trainee"] {
+    border-radius: 14px;
+    padding-left: 4px;
+  }
+  .magnet[data-kind="trainee"]::before {
+    content: '実';
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0,0,0,0.3);
+    color: white;
+    font-size: 9px;
+    font-weight: bold;
+    padding: 0 3px;
+    height: 14px;
+    min-width: 14px;
+    border-radius: 50%;
+    margin-right: 4px;
+    line-height: 1;
+    flex-shrink: 0;
+  }
+  body.filter-jp .magnet[data-kind="trainee"] { display: none !important; }
+  body.filter-trainee .magnet[data-type="person"]:not([data-kind="trainee"]) { display: none !important; }
+
+  /* ===== Filter button group ===== */
+  .filter-group {
+    display: inline-flex;
+    background: rgba(255,255,255,0.1);
+    border-radius: 6px;
+    padding: 2px;
+    gap: 1px;
+  }
+  .filter-group button {
+    padding: 6px 10px;
+    border: 0;
+    background: transparent;
+    color: rgba(255,255,255,0.7);
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 13px;
+    min-height: 32px;
+  }
+  .filter-group button.active {
+    background: #fff;
+    color: #2b3a4a;
+    font-weight: bold;
+  }
+
+  /* ===== Kind toggle in color picker ===== */
+  .kind-toggle {
+    display: flex;
+    gap: 6px;
+    background: #f3f3ee;
+    border-radius: 6px;
+    padding: 4px;
+    margin-bottom: 12px;
+  }
+  .kind-toggle button {
+    flex: 1;
+    padding: 8px;
+    border: 0;
+    background: transparent;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 13px;
+  }
+  .kind-toggle button.active {
+    background: #2b3a4a;
+    color: white;
+    font-weight: bold;
+  }
+
+  /* ===== List modal ===== */
+  .modal-large {
+    width: 95vw;
+    max-width: 1400px;
+    height: 90vh;
+    max-height: 900px;
+    display: flex;
+    flex-direction: column;
+  }
+  .modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 8px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid #eee;
+  }
+  .modal-header h2 { font-size: 16px; }
+  .close-btn {
+    background: transparent;
+    border: 0;
+    font-size: 22px;
+    line-height: 1;
+    cursor: pointer;
+    padding: 4px 10px;
+  }
+  .list-controls {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 8px 0;
+  }
+  .list-controls .filter-group { background: #f0f0e8; }
+  .list-controls .filter-group button { color: #555; }
+  .list-controls .filter-group button.active { background: #2b3a4a; color: white; }
+  .list-controls input[type="search"], .list-controls input[type="text"] {
+    flex: 1;
+    padding: 8px 10px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-size: 13px;
+  }
+  .list-table-wrap {
+    flex: 1;
+    overflow: auto;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+  }
+  .list-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12.5px;
+  }
+  .list-table th, .list-table td {
+    border: 1px solid #e2e0d2;
+    padding: 6px 8px;
+    text-align: left;
+    vertical-align: top;
+    min-width: 120px;
+  }
+  .list-table th {
+    background: #f8f8f4;
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    font-weight: bold;
+    text-align: center;
+  }
+  .list-table th.sun { color: #d33; }
+  .list-table th.sat { color: #2563eb; }
+  .list-table td.name {
+    background: #fafaf4;
+    position: sticky;
+    left: 0;
+    font-weight: bold;
+    min-width: 110px;
+    width: 110px;
+  }
+  .list-table td.empty { color: #ccc; text-align: center; }
+  .list-table tr.row-trainee td.name::before {
+    content: '実';
+    display: inline-block;
+    background: #2b3a4a;
+    color: white;
+    font-size: 9px;
+    padding: 1px 4px;
+    border-radius: 8px;
+    margin-right: 6px;
+    line-height: 1.2;
+  }
+  .list-table td.conflict { background: #ffe5e5; }
+  .list-table .site-tag {
+    display: inline-block;
+    background: rgba(43,58,74,0.1);
+    padding: 1px 5px;
+    border-radius: 3px;
+    margin: 1px 2px 1px 0;
+    font-size: 11px;
+    white-space: nowrap;
+  }
+
+  /* ===== Mobile / iPad tweaks ===== */
+  @media (max-width: 1024px) {
+    .grid { grid-template-columns: 150px repeat(7, minmax(110px, 1fr)) 110px; min-width: 1080px; }
+    .pool { width: 180px; }
+  }
+  @media (max-width: 768px) {
+    .toolbar h1 { display: none; }
+    .pool { width: 150px; }
+  }
+
+  /* ===== Print / PDF ===== */
+  @media print {
+    @page {
+      size: A3 landscape;
+      margin: 8mm;
+    }
+    html, body {
+      background: white !important;
+      color: black !important;
+      overflow: visible !important;
+      height: auto !important;
+      -webkit-print-color-adjust: exact !important;
+      print-color-adjust: exact !important;
+    }
+    .toolbar, .pool, .modal-bg { display: none !important; }
+    .site-drag-handle, .site-copy-handle, .day-copy-btn,
+    .cell-copy-handle, .magnet .del { display: none !important; }
+    .app { display: block !important; height: auto !important; }
+    .main { display: block !important; overflow: visible !important; }
+    .grid-wrap { overflow: visible !important; height: auto !important; }
+    .grid {
+      min-width: 0 !important;
+      width: 100% !important;
+      grid-template-columns: 110px repeat(7, minmax(0, 1fr)) 90px !important;
+    }
+    .head, .site-name, .cell {
+      page-break-inside: avoid;
+      break-inside: avoid;
+    }
+    .site-row {
+      page-break-inside: avoid;
+      break-inside: avoid;
+    }
+    .magnet {
+      font-size: 9.5px !important;
+      padding: 2px 5px !important;
+      min-height: 16px !important;
+      box-shadow: none !important;
+      -webkit-print-color-adjust: exact !important;
+      print-color-adjust: exact !important;
+    }
+    .magnet[data-kind="trainee"]::before {
+      font-size: 7px !important;
+      height: 11px !important;
+      min-width: 11px !important;
+    }
+    .cell-note { font-size: 8.5px !important; }
+    .day-num { font-size: 13px !important; }
+    .day-name { font-size: 9px !important; }
+    .head { min-height: 28px !important; padding: 2px !important; }
+    .site-name-inner { font-size: 9.5px !important; }
+    .site-name .period { font-size: 8px !important; }
+    .cell, .site-name { min-height: 44px !important; padding: 2px 3px !important; }
+    .site-name {
+      -webkit-print-color-adjust: exact !important;
+      print-color-adjust: exact !important;
+    }
+    .magnet-list { gap: 2px !important; min-height: 14px !important; }
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="toolbar">
+    <h1>現場配置ボード</h1>
+    <button onclick="prevWeek()" title="前週 (-7日)">◀◀</button>
+    <button onclick="prevDay()" title="前日 (-1日)">◀</button>
+    <button onclick="thisWeek()">今週</button>
+    <button onclick="nextDay()" title="次日 (+1日)">▶</button>
+    <button onclick="nextWeek()" title="次週 (+7日)">▶▶</button>
+    <span id="week-label" style="margin: 0 8px; font-weight: bold;"></span>
+    <div class="filter-group" id="filter-group">
+      <button data-filter="all" class="active" onclick="setViewFilter('all')">全体</button>
+      <button data-filter="jp" onclick="setViewFilter('jp')">日本人</button>
+      <button data-filter="trainee" onclick="setViewFilter('trainee')">実習生</button>
+    </div>
+    <button onclick="openListView()">📋 一覧</button>
+    <div class="spacer"></div>
+    <button id="edit-btn" class="primary" onclick="toggleEditMode()">編集モード</button>
+    <button onclick="addSite()">＋現場</button>
+    <button onclick="exportPDF()">📄 PDF出力</button>
+    <button onclick="exportData()" title="JSONバックアップ">💾</button>
+    <button onclick="importData()" title="JSONから復元">↓</button>
+    <span id="dbx-status" class="dbx-status" onclick="openSettings()" title="クリックで設定">
+      <span class="dot"></span><span id="dbx-status-text">未接続</span>
+    </span>
+    <button onclick="openSettings()" title="設定">⚙</button>
+    <button onclick="resetAll()" title="全リセット">⟲</button>
+  </div>
+  <div class="main">
+    <div class="grid-wrap">
+      <div id="grid" class="grid"></div>
+    </div>
+    <div class="pool">
+      <div class="pool-tabs">
+        <div class="pool-tab active" data-type="person" onclick="switchTab('person')">人員</div>
+        <div class="pool-tab" data-type="equipment" onclick="switchTab('equipment')">重機</div>
+        <div class="pool-tab" data-type="vehicle" onclick="switchTab('vehicle')">車両</div>
+      </div>
+      <div class="pool-body">
+        <div id="pool-items" class="pool-items"></div>
+        <button class="add-btn" onclick="addPoolItem()">＋ マグネット追加</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="modal-bg" class="modal-bg">
+  <div class="modal">
+    <h2 id="modal-title"></h2>
+    <input id="modal-input" type="text" />
+    <input id="modal-input2" type="text" style="display:none" />
+    <div class="modal-actions">
+      <button onclick="closeModal()">キャンセル</button>
+      <button class="primary" onclick="confirmModal()">OK</button>
+    </div>
+  </div>
+</div>
+
+<div id="color-modal" class="modal-bg">
+  <div class="modal">
+    <h2>マグネット設定</h2>
+    <div id="color-target" class="color-target"></div>
+    <div id="name-edit-row" class="name-edit-row" style="display:none">
+      <label for="name-edit-input">名前：</label>
+      <input type="text" id="name-edit-input" />
+      <button class="save-btn" onclick="applyRename()">変更</button>
+    </div>
+    <div id="meta-info" class="meta-info" style="display:none"></div>
+    <div id="kind-toggle-wrap" style="display:none">
+      <div class="kind-toggle">
+        <button id="kind-jp" onclick="setLabelKind('jp')">日本人</button>
+        <button id="kind-trainee" onclick="setLabelKind('trainee')">実習生</button>
+      </div>
+    </div>
+    <div style="font-size:12px; color:#666; margin-bottom:6px;">色を選択：</div>
+    <div id="color-grid" class="color-grid"></div>
+    <div class="color-custom-row">
+      <label for="color-custom-input">カスタム色：</label>
+      <input type="color" id="color-custom-input">
+    </div>
+    <div class="modal-actions">
+      <button onclick="closeColorPicker()">キャンセル</button>
+      <button class="danger" onclick="resetColorToDefault()">標準色に戻す</button>
+    </div>
+  </div>
+</div>
+
+<div id="settings-modal" class="modal-bg settings-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <h2>設定</h2>
+      <button class="close-btn" onclick="closeSettings()">×</button>
+    </div>
+
+    <div class="settings-section">
+      <h3>Dropbox連携</h3>
+      <p>クラウドのDropboxに自動保存し、PC・iPadなど複数端末から同じデータを編集できます。</p>
+
+      <div class="settings-row">
+        <label style="font-size:12px; color:#666; min-width:80px;">App Key：</label>
+        <input type="text" id="dbx-app-key" placeholder="Dropboxアプリの App Key を貼り付け" />
+        <button onclick="saveDbxAppKey()">保存</button>
+      </div>
+      <div class="settings-row">
+        <label style="font-size:12px; color:#666; min-width:80px;">保存パス：</label>
+        <input type="text" id="dbx-file-path" placeholder="/board.json" />
+        <button onclick="saveDbxFilePath()">保存</button>
+      </div>
+
+      <div class="settings-row">
+        <button id="dbx-connect-btn" class="primary" onclick="dbxConnect()">Dropboxに接続</button>
+        <button id="dbx-disconnect-btn" class="danger" onclick="dbxDisconnect()" style="display:none">切断</button>
+        <button id="dbx-sync-btn" onclick="dbxManualSync()" style="display:none">今すぐ同期</button>
+        <button id="dbx-pull-btn" onclick="dbxManualPull()" style="display:none">↓最新取得</button>
+      </div>
+
+      <div id="dbx-info" class="last-sync"></div>
+
+      <div class="settings-help">
+        <b>初回設定（5分）：</b>
+        <ol>
+          <li><a href="https://www.dropbox.com/developers/apps/create" target="_blank">Dropbox 開発者ページ</a>を開く</li>
+          <li>「Scoped access」→「App folder」を選択、名前を入力（例：現場配置ボード）→ Create app</li>
+          <li>「Settings」タブで「Redirect URIs」に <code id="dbx-redirect-display"></code> を追加</li>
+          <li>「Permissions」タブで <code>files.content.write</code>, <code>files.content.read</code>, <code>files.metadata.read</code> をチェック → Submit</li>
+          <li>「Settings」タブの「App key」をコピーして上に貼り付け → 保存 → 「Dropboxに接続」</li>
+        </ol>
+        <b>iPadから使うとき：</b>同じ App Key を入力すれば iPad の Safari でも Dropbox 認証して同じデータを編集できます。
+      </div>
+    </div>
+
+    <div class="modal-actions">
+      <button onclick="closeSettings()">閉じる</button>
+    </div>
+  </div>
+</div>
+
+<div id="day-copy-modal" class="modal-bg">
+  <div class="modal">
+    <h2 id="day-copy-title">日コピー</h2>
+    <div style="font-size:12px; color:#666; margin-bottom:6px;">コピー先（複数選択可）：</div>
+    <div id="day-copy-options"></div>
+    <div class="day-copy-mode">
+      <label><input type="radio" name="copy-mode" value="overwrite" checked> 上書き（コピー先を置換）</label>
+      <label><input type="radio" name="copy-mode" value="merge"> 追加（既存に足す）</label>
+    </div>
+    <div class="modal-actions">
+      <button onclick="closeDayCopy()">キャンセル</button>
+      <button class="primary" onclick="executeDayCopy()">コピー実行</button>
+    </div>
+  </div>
+</div>
+
+<div id="list-modal" class="modal-bg">
+  <div class="modal modal-large">
+    <div class="modal-header">
+      <h2>週間一覧 <span id="list-week-label" style="font-weight:normal; color:#666; margin-left:8px;"></span></h2>
+      <button class="close-btn" onclick="closeListView()">×</button>
+    </div>
+    <div class="list-controls">
+      <div class="filter-group" id="list-filter-group">
+        <button data-filter="all" onclick="setViewFilter('all', true)">全体</button>
+        <button data-filter="jp" onclick="setViewFilter('jp', true)">日本人</button>
+        <button data-filter="trainee" onclick="setViewFilter('trainee', true)">実習生</button>
+      </div>
+      <input type="search" id="list-search" placeholder="名前で検索..." oninput="renderListTable()" />
+      <button onclick="renderListTable()">更新</button>
+    </div>
+    <div class="list-table-wrap">
+      <table id="list-table" class="list-table"></table>
+    </div>
+  </div>
+</div>
+
+<script>
+'use strict';
+
+const STORAGE_KEY = 'genba-board-v1';
+const DAYS_JP = ['日','月','火','水','木','金','土'];
+
+// 重機一覧 ラベル = "丸数字 容量"（建設機械_統合一覧20260325 より）
+const DEFAULT_EQUIPMENT_FROM_LIST = [
+  '① 0.7','② 0.7','③ 0.7','④ 0.2','⑤ 0.1','⑥ 0.15','⑦ 0.1','⑧ 0.2','⑨ 0.2','⑩ 0.25',
+  '⑪ 0.07','⑫ 0.25','⑬ 0.45','⑭ 0.5','⑮ 0.45','⑯ 0.1','⑰ 0.1','⑱ 0.2','⑲ 0.15','⑳ 0.4',
+  '㉑ 0.15','㉒ 0.2','㉓ 0.1','㉔ 0.15','㉕ 0.1','㉖ 0.2','㉘ 0.1','㉙ 0.2','㉛ 0.15','㉜ 0.45',
+  '㉝ 0.15','㉞ 0.1','㊱ 0.1','㊲ 0.45','㊳ 0.25','㊴ 0.25','㊵ 0.25','㊶ 0.1','㊷ 2.5','㊸ 1.0',
+  '㊹ 0.45','㊺ 0.2','㊻ 0.1','㊼ 0.1','㊽ 0.1','㊾ 0.1',
+];
+
+// 容量別カラー（サイズ順に判別しやすい色）
+const EQUIP_CAPACITY_COLORS = {
+  '0.07': '#BDBDBD', // 灰 - 超小
+  '0.1':  '#42A5F5', // 青
+  '0.15': '#26C6DA', // シアン
+  '0.2':  '#66BB6A', // 緑
+  '0.25': '#D4E157', // ライム
+  '0.4':  '#FFCA28', // 黄
+  '0.45': '#FFA726', // 橙
+  '0.5':  '#FF7043', // 濃橙
+  '0.7':  '#EF5350', // 赤 - 大型油圧
+  '1.0':  '#AB47BC', // 紫
+  '2.5':  '#5C6BC0', // 藍 - ローラー
+};
+
+// 重機詳細メタデータ（タップ時に表示）
+const EQUIPMENT_META = {
+  '① 0.7':  {no:1,  mfr:'コマツ',  model:'PC200-10',         type:'油圧ショベル'},
+  '② 0.7':  {no:2,  mfr:'CAT',     model:'320-07 GLCT6',     type:'油圧ショベル'},
+  '③ 0.7':  {no:3,  mfr:'コマツ',  model:'PC200-11',         type:'油圧ショベル'},
+  '④ 0.2':  {no:4,  mfr:'CAT',     model:'050ESR',           type:'油圧ショベル'},
+  '⑤ 0.1':  {no:5,  mfr:'CAT',     model:'303CSR',           type:'油圧ショベル', note:'修理'},
+  '⑥ 0.15': {no:6,  mfr:'CAT',     model:'040ESR-MR3T',      type:'油圧ショベル'},
+  '⑦ 0.1':  {no:7,  mfr:'日立',    model:'ZX30U-5A',         type:'解体機'},
+  '⑧ 0.2':  {no:8,  mfr:'コマツ',  model:'PC58UU-5',         type:'油圧ショベル'},
+  '⑨ 0.2':  {no:9,  mfr:'CAT',     model:'050SR',            type:'油圧ショベル'},
+  '⑩ 0.25': {no:10, mfr:'コマツ',  model:'PC78US-8',         type:'油圧ショベル'},
+  '⑪ 0.07': {no:11, mfr:'コマツ',  model:'PC20UU-5',         type:'ミニショベル'},
+  '⑫ 0.25': {no:12, mfr:'コマツ',  model:'PC78US-10',        type:'油圧ショベル'},
+  '⑬ 0.45': {no:13, mfr:'住友',    model:'SH135X-7',         type:'油圧ショベル'},
+  '⑭ 0.5':  {no:14, mfr:'コマツ',  model:'WA50-6',           type:'タイヤショベル'},
+  '⑮ 0.45': {no:15, mfr:'コマツ',  model:'PC138US-11',       type:'解体機'},
+  '⑯ 0.1':  {no:16, mfr:'日立',    model:'ZX30B-5B',         type:'油圧ショベル(クレーン)'},
+  '⑰ 0.1':  {no:17, mfr:'ヤンマー',model:'B30U',             type:'油圧ショベル'},
+  '⑱ 0.2':  {no:18, mfr:'コマツ',  model:'PC58UU-6',         type:'油圧ショベル'},
+  '⑲ 0.15': {no:19, mfr:'ヤンマー',model:'B40U',             type:'油圧ショベル'},
+  '⑳ 0.4':  {no:20, mfr:'ヤンマー',model:'V5-1',             type:'タイヤショベル'},
+  '㉑ 0.15': {no:21, mfr:'コマツ',  model:'PC38UU-5',         type:'油圧ショベル(クレーン)'},
+  '㉒ 0.2':  {no:22, mfr:'コマツ',  model:'PC55MR-3',         type:'解体機'},
+  '㉓ 0.1':  {no:23, mfr:'CAT',     model:'030ESR-MR3TN',     type:'油圧ショベル'},
+  '㉔ 0.15': {no:24, mfr:'コマツ',  model:'PC38UU-5',         type:'油圧ショベル'},
+  '㉕ 0.1':  {no:25, mfr:'コマツ',  model:'PC30UUC-6',        type:'油圧ショベル'},
+  '㉖ 0.2':  {no:26, mfr:'ヤンマー',model:'VIO55-6A',         type:'解体機'},
+  '㉘ 0.1':  {no:28, mfr:'コマツ',  model:'PC30UU-5',         type:'油圧ショベル'},
+  '㉙ 0.2':  {no:29, mfr:'コマツ',  model:'PC58UU-5',         type:'油圧ショベル'},
+  '㉛ 0.15': {no:31, mfr:'コマツ',  model:'PC38UU-5',         type:'油圧ショベル'},
+  '㉜ 0.45': {no:32, mfr:'CAT',     model:'313CSR-PMZ-T5',    type:'油圧ショベル'},
+  '㉝ 0.15': {no:33, mfr:'ヤンマー',model:'VIO40-2',          type:'油圧ショベル'},
+  '㉞ 0.1':  {no:34, mfr:'コマツ',  model:'PC30UU-5',         type:'油圧ショベル'},
+  '㊱ 0.1':  {no:36, mfr:'ヤンマー',model:'B30U',             type:'油圧ショベル(クレーン)'},
+  '㊲ 0.45': {no:37, mfr:'日立',    model:'ZX135US-6',        type:'油圧ショベル'},
+  '㊳ 0.25': {no:38, mfr:'日立',    model:'ZX75UR-5B',        type:'油圧ショベル(クレーン)'},
+  '㊴ 0.25': {no:39, mfr:'コマツ',  model:'PC78UU-8',         type:'油圧ショベル(クレーン)'},
+  '㊵ 0.25': {no:40, mfr:'ヤンマー',model:'B60U',             type:'油圧ショベル'},
+  '㊶ 0.1':  {no:41, mfr:'日立',    model:'ZX30UR-3',         type:'油圧ショベル(クレーン)'},
+  '㊷ 2.5':  {no:42, mfr:'日立',    model:'ZC35C',            type:'コンバインドローラー'},
+  '㊸ 1.0':  {no:43, mfr:'日立',    model:'ZW80S-5B',         type:'タイヤショベル'},
+  '㊹ 0.45': {no:44, mfr:'CAT',     model:'315GC-07-GMCT5S',  type:'油圧ショベル(クレーン)'},
+  '㊺ 0.2':  {no:45, mfr:'CAT',     model:'305SR-07-MS4TSC',  type:'油圧ショベル(クレーン)'},
+  '㊻ 0.1':  {no:46, mfr:'CAT',     model:'303SR-07-MS3TSC',  type:'油圧ショベル(クレーン)'},
+  '㊼ 0.1':  {no:47, mfr:'クボタ',  model:'RX306S2',          type:'油圧ショベル(クレーン)'},
+  '㊽ 0.1':  {no:48, mfr:'クボタ',  model:'RX306S2',          type:'油圧ショベル(クレーン)'},
+  '㊾ 0.1':  {no:49, mfr:'クボタ',  model:'RX306S2',          type:'油圧ショベル(クレーン)'},
+};
+
+// 旧V1ラベル（マイグレーション時に除去）
+const V1_EQUIP_LABELS = [
+  'K PC200-10','K PC200-11','K PC58UU-5①','K PC58UU-5②','K PC58UU-6',
+  'K PC78US-8','K PC78US-10','K PC78UU(ク)','K PC20UU','K PC138US',
+  'K PC30UU-5①','K PC30UU-5②','K PC30UUC','K PC38UU-5①','K PC38UU-5②',
+  'K PC38UU(ク)','K PC55MR','K WA50',
+  'C 320-07','C 030ESR','C 040ESR','C 050ESR','C 050SR','C 303CSR',
+  'C 303SR(ク)','C 305SR(ク)','C 313CSR','C 315GC(ク)',
+  'Y B30U①','Y B30U(ク)','Y B40U','Y B60U','Y V5','Y VIO40','Y VIO55',
+  'H ZX30U','H ZX30B(ク)','H ZX30UR(ク)','H ZX75UR(ク)','H ZX135US',
+  'H ZC35C','H ZW80S','S SH135X','KU RX306S2①','KU RX306S2②','KU RX306S2③',
+];
+
+// 車両詳細メタデータ
+const VEHICLE_META = {
+  '2t1669':  {type:'2tダンプ',       mfr:'いすゞ', model:'PB-NKR81AD',  plate:'N400ｿ1669'},
+  '2t7024':  {type:'2tダンプ',       mfr:'いすゞ', model:'TPG-NJR85AD', plate:'N400ﾂ7024'},
+  '2t7174':  {type:'2tダンプ',       mfr:'いすゞ', model:'TPG-NJR85AD', plate:'N400ﾂ7174'},
+  '2t8733':  {type:'2tダンプ',       mfr:'いすゞ', model:'BKG-NJR85AD', plate:'N400ﾂ8733'},
+  '2t8747':  {type:'2tダンプ',       mfr:'日野',   model:'TKG-XZC610T', plate:'N400ﾂ8747', driver:'坂本'},
+  '3t4174':  {type:'3tダンプ',       mfr:'いすゞ', model:'TKG-NJR85AD', plate:'N400ﾁ4174', driver:'伊藤'},
+  '3t4088':  {type:'3tダンプ',       mfr:'いすゞ', model:'TPG-NKR85AD', plate:'N400ﾂ4088'},
+  '3t7145':  {type:'3tダンプA/T',    mfr:'いすゞ', model:'TPG-NKR85AD', plate:'N400ﾂ7145', driver:'菊池'},
+  '3t536':   {type:'3tダンプ',       mfr:'いすゞ', model:'2RG-NKR88AD', plate:'F400ｻ・536', driver:'黛'},
+  '3t5001':  {type:'3tダンプ',       mfr:'いすゞ', model:'2RG-NKR88AT', plate:'N430ﾀ5001', driver:'髙田'},
+  '3t5002':  {type:'3tダンプ',       mfr:'いすゞ', model:'2RG-NKR88AT', plate:'N430ｽ5002', driver:'永井'},
+  '3t5003':  {type:'3tダンプ',       mfr:'いすゞ', model:'2RG-NKR88AT', plate:'N430ｾ5003', driver:'蘭太'},
+  '4t543':   {type:'4tダンプ',       mfr:'日野',   model:'BKG-FC7JCYA', plate:'F100ｻ・543'},
+  '7tクレーン3719':{type:'7tクレーン付', mfr:'いすゞ', model:'2RG-FTR90U2', plate:'N100ﾊ3719'},
+  'エルフセルフ1984':{type:'エルフセルフ',mfr:'いすゞ',model:'SKG-NPR85YN',plate:'N130ｽ1984'},
+  'エルフ7175':{type:'エルフ2t',     mfr:'いすゞ', model:'TPG-NJR85AD', plate:'N400ﾂ7175', driver:'渡邊'},
+  'エルフW73':{type:'エルフWキャブ', mfr:'いすゞ', model:'TRG-NHR85A',  plate:'N400ノ73'},
+  'アトラスW5007':{type:'アトラスWキャブ',mfr:'日産',model:'GE-SH4F23',plate:'N430ｻ5007'},
+  'キャンター5011':{type:'キャンター',mfr:'三菱',model:'2RG-FBA60',plate:'N430ｿ5011',driver:'小杉'},
+  '習5058':  {type:'ハイエース',      mfr:'トヨタ', model:'QDF-KDH201V', plate:'Ｎ400ﾂ5058'},
+  '習5050':  {type:'キャラバン',      mfr:'日産',   model:'LDF-VW2E26',  plate:'Ｎ430ﾛ5050'},
+  '船5050':  {type:'キャラバン',      mfr:'日産',   model:'3DF-VN2E26',  plate:'F410ｾ5050'},
+  'パッカー9486':{type:'パッカー車', mfr:'日野',   model:'LD-BZU300X',  plate:'Ｎ800ｽ9486'},
+  '散水車9604':{type:'散水車',       mfr:'三菱',   model:'PDG-FE83DY',  plate:'N800ｽ9604'},
+  '4t3525':  {type:'4tダンプ',       mfr:'いすゞ', model:'PKG-FRR90S1', plate:'N100ｽ3525', note:'ガーデンホームズ'},
+  '3t4688':  {type:'3tダンプ',       mfr:'いすゞ', model:'BDG-NKR85AD', plate:'N400ﾀ4688', driver:'小松', note:'ガーデンホームズ'},
+  '3t1128':  {type:'3tダンプ',       mfr:'いすゞ', model:'TPG-NKR85AD', plate:'N430ﾙ1128', note:'ガーデンホームズ'},
+  '3tローダー1128':{type:'3tローダー',mfr:'いすゞ',model:'TPG-NKR85AN',plate:'N430ﾛ1128',note:'ガーデンホームズ'},
+};
+
+// 車両一覧（車両明細管理表 より、ナンバー下4桁）
+const DEFAULT_VEHICLES_FROM_LIST = [
+  '2t1669','2t7024','2t7174','2t8733','2t8747',
+  '3t4174','3t4088','3t7145','3t536','3t5001','3t5002','3t5003',
+  '4t543','7tクレーン3719',
+  'エルフセルフ1984','エルフ7175','エルフW73',
+  'アトラスW5007','キャンター5011',
+  '習5058','習5050','船5050',
+  'パッカー9486','散水車9604',
+  '4t3525','3t4688','3t1128','3tローダー1128',
+];
+
+let state = loadState();
+let activeTab = 'person';
+let editMode = false;
+let modalResolver = null;
+
+// ========== State ==========
+function loadState() {
+  try {
+    const s = localStorage.getItem(STORAGE_KEY);
+    if (s) {
+      const obj = JSON.parse(s);
+      if (!obj.labelColors) obj.labelColors = {};
+      if (!obj.personKind) obj.personKind = {};
+      if (!obj.viewFilter) obj.viewFilter = 'all';
+      if (!obj.labels) obj.labels = { person: [], equipment: [], vehicle: [] };
+      if (!obj.labels.equipment) obj.labels.equipment = [];
+      if (!obj.labels.vehicle) obj.labels.vehicle = [];
+      if (!obj.equipImportV1) {
+        DEFAULT_VEHICLES_FROM_LIST.forEach(l => {
+          if (!obj.labels.vehicle.includes(l)) obj.labels.vehicle.push(l);
+        });
+        obj.equipImportV1 = true;
+      }
+      if (!obj.equipImportV2) {
+        obj.labels.equipment = obj.labels.equipment.filter(l => !V1_EQUIP_LABELS.includes(l));
+        obj.equipImportV2 = true;
+      }
+      if (!obj.equipImportV3) {
+        const V2_TO_V3 = {
+          '1 0.7':'① 0.7','2 0.7':'② 0.7','3 0.7':'③ 0.7','4 0.2':'④ 0.2','5 0.1':'⑤ 0.1',
+          '6 0.15':'⑥ 0.15','7 0.1':'⑦ 0.1','8 0.2':'⑧ 0.2','9 0.2':'⑨ 0.2','10 0.25':'⑩ 0.25',
+          '11 0.07':'⑪ 0.07','12 0.25':'⑫ 0.25','13 0.45':'⑬ 0.45','14 0.5':'⑭ 0.5','15 0.45':'⑮ 0.45',
+          '16 0.1':'⑯ 0.1','17 0.1':'⑰ 0.1','18 0.2':'⑱ 0.2','19 0.15':'⑲ 0.15','20 0.4':'⑳ 0.4',
+          '21 0.15':'㉑ 0.15','22 0.2':'㉒ 0.2','23 0.1':'㉓ 0.1','24 0.15':'㉔ 0.15','25 0.1':'㉕ 0.1',
+          '26 0.2':'㉖ 0.2','28 0.1':'㉘ 0.1','29 0.2':'㉙ 0.2','31 0.15':'㉛ 0.15','32 0.45':'㉜ 0.45',
+          '33 0.15':'㉝ 0.15','34 0.1':'㉞ 0.1','36 0.1':'㊱ 0.1','37 0.45':'㊲ 0.45','38 0.25':'㊳ 0.25',
+          '39 0.25':'㊴ 0.25','40 0.25':'㊵ 0.25','41 0.1':'㊶ 0.1','42 2.5':'㊷ 2.5','43 1.0':'㊸ 1.0',
+          '44 0.45':'㊹ 0.45','45 0.2':'㊺ 0.2','46 0.1':'㊻ 0.1','47 0.1':'㊼ 0.1','48 0.1':'㊽ 0.1','49 0.1':'㊾ 0.1',
+        };
+        obj.labels.equipment = obj.labels.equipment.map(l => V2_TO_V3[l] || l);
+        DEFAULT_EQUIPMENT_FROM_LIST.forEach(l => {
+          if (!obj.labels.equipment.includes(l)) obj.labels.equipment.push(l);
+        });
+        Object.values(obj.schedule || {}).forEach(siteSchedule => {
+          Object.values(siteSchedule || {}).forEach(cellData => {
+            (cellData && cellData.magnets || []).forEach(m => {
+              if (m.type === 'equipment' && V2_TO_V3[m.label]) m.label = V2_TO_V3[m.label];
+            });
+          });
+        });
+        const newColors = {};
+        Object.entries(obj.labelColors || {}).forEach(([k, v]) => {
+          const idx = k.indexOf(':');
+          const t = k.substring(0, idx);
+          const lab = k.substring(idx + 1);
+          if (t === 'equipment' && V2_TO_V3[lab]) newColors[`equipment:${V2_TO_V3[lab]}`] = v;
+          else newColors[k] = v;
+        });
+        obj.labelColors = newColors;
+        obj.equipImportV3 = true;
+      }
+      return obj;
+    }
+  } catch(e){}
+  return initialState();
+}
+
+function saveState() {
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
+  catch(e){ console.error('Save failed', e); }
+}
+
+function initialState() {
+  return {
+    weekStart: mondayOf(new Date()).toISOString().slice(0,10),
+    sites: [
+      { id: 's1', name: '印内三丁目33宅地開発', period: '5/上〜6/末' },
+      { id: 's2', name: '軽井沢ひかり病院', period: '' },
+      { id: 's3', name: '沼原東', period: '2/上〜6/20' },
+      { id: 's4', name: '若葉区小倉町', period: '' },
+      { id: 's5', name: '東菅野2丁目ブロック工事', period: '' },
+      { id: 's6', name: '鶴毛区山玉町17宅地開発', period: '〜4/末' },
+      { id: 's7', name: '富里(肉)仕切ブロック', period: '' },
+      { id: 's8', name: '板橋 市場開設', period: '〜6/中' },
+      { id: 's9', name: '緑区誉田町2丁目', period: '5/8〜12/4' },
+      { id: 's10', name: '前見え家1宅地開発', period: '4/1〜9/末' },
+      { id: 's11', name: '市川市国府台擁壁工事', period: '5/4〜5/末' },
+      { id: 's12', name: '習志野台四丁目12宅地開発', period: '5/20〜7/末' },
+      { id: 's13', name: '秋谷様邸 外構工事', period: '5/11〜6/末' },
+      { id: 's14', name: '山手3宅地造成', period: '5/4〜9/4' },
+      { id: 's15', name: '道路使用 頁見2丁目', period: '' },
+      { id: 's16', name: '松戸新田4宅地造成', period: '5/4〜' },
+      { id: 's17', name: '木下小学校', period: '' },
+      { id: 's18', name: '富塚事務所', period: '' },
+      { id: 's19', name: '二和置場', period: '' },
+    ],
+    labels: {
+      person: ['DUY','TIEN','MANH','HOANG','HA','KHANH','MINH','DIEN','GIANG','NGOC','TUAN','TRUONG','HIEU','CUONG','SON','LINH','木鋪','伊藤','菊池','森','椎名','坂本','永井','京','浩太郎','萩原','木本','トビ','滝下','西村','関太','渡邊','デラ','高田','久保田','琉模','中野','アディ','小杉','杉浦','宮下','遠藤','ハリム','小松','陽太','シンタロ'],
+      equipment: [
+        ...DEFAULT_EQUIPMENT_FROM_LIST,
+        '4tローダー','3tローダー','ユニック',
+        '杭ナビ①','杭ナビ②','杭ナビ③',
+      ],
+      vehicle: [...DEFAULT_VEHICLES_FROM_LIST],
+    },
+    schedule: {},
+    labelColors: {},
+    personKind: {},
+    viewFilter: 'all',
+  };
+}
+
+// ========== Date helpers ==========
+function mondayOf(d) {
+  const date = new Date(d);
+  const day = date.getDay();
+  const diff = date.getDate() - day + (day === 0 ? -6 : 1);
+  return new Date(date.setDate(diff));
+}
+function addDays(dateStr, n) {
+  const d = new Date(dateStr);
+  d.setDate(d.getDate() + n);
+  return d.toISOString().slice(0,10);
+}
+function formatDate(dateStr) {
+  const d = new Date(dateStr);
+  return `${d.getMonth()+1}/${d.getDate()}`;
+}
+function dayOfWeek(dateStr) {
+  return new Date(dateStr).getDay();
+}
+
+// ========== Week / Day nav ==========
+function prevWeek() { state.weekStart = addDays(state.weekStart, -7); saveState(); render(); }
+function nextWeek() { state.weekStart = addDays(state.weekStart, 7); saveState(); render(); }
+function prevDay()  { state.weekStart = addDays(state.weekStart, -1); saveState(); render(); }
+function nextDay()  { state.weekStart = addDays(state.weekStart,  1); saveState(); render(); }
+function thisWeek() { state.weekStart = mondayOf(new Date()).toISOString().slice(0,10); saveState(); render(); }
+
+// ========== Render ==========
+function render() {
+  renderWeekLabel();
+  renderGrid();
+  renderPool();
+  document.body.classList.toggle('edit-mode', editMode);
+  document.getElementById('edit-btn').classList.toggle('active', editMode);
+  applyFilterClass();
+  updateFilterButtons();
+}
+
+function applyFilterClass() {
+  document.body.classList.toggle('filter-jp', state.viewFilter === 'jp');
+  document.body.classList.toggle('filter-trainee', state.viewFilter === 'trainee');
+}
+
+function updateFilterButtons() {
+  document.querySelectorAll('.filter-group').forEach(g => {
+    g.querySelectorAll('button').forEach(b => {
+      b.classList.toggle('active', b.dataset.filter === state.viewFilter);
+    });
+  });
+}
+
+function renderWeekLabel() {
+  const start = state.weekStart;
+  const end = addDays(start, 6);
+  const startD = new Date(start);
+  document.getElementById('week-label').textContent =
+    `${startD.getFullYear()}年 ${formatDate(start)} 〜 ${formatDate(end)}`;
+}
+
+function renderGrid() {
+  const grid = document.getElementById('grid');
+  grid.innerHTML = '';
+
+  // Header row
+  const headSite = document.createElement('div');
+  headSite.className = 'head site-head';
+  headSite.textContent = '現場名';
+  grid.appendChild(headSite);
+
+  for (let i = 0; i < 7; i++) {
+    const dateStr = addDays(state.weekStart, i);
+    const dow = dayOfWeek(dateStr);
+    const cls = dow === 0 ? 'sun' : dow === 6 ? 'sat' : '';
+    let dayTotal = 0;
+    state.sites.forEach(s => {
+      const c = state.schedule[s.id] && state.schedule[s.id][dateStr];
+      if (c && c.magnets) dayTotal += c.magnets.filter(m => m.type === 'person').length;
+    });
+    const totalHtml = dayTotal > 0 ? `<span class="day-total">計${dayTotal}人</span>` : '';
+    const head = document.createElement('div');
+    head.className = 'head';
+    head.dataset.date = dateStr;
+    head.innerHTML = `<span class="day-name ${cls}">${DAYS_JP[dow]}</span><span class="day-num ${cls}">${new Date(dateStr).getDate()}</span>${totalHtml}<button class="day-copy-btn" title="タップ：複数選択コピー / ドラッグ：別日へコピー">📋</button>`;
+    const btn = head.querySelector('.day-copy-btn');
+    const dayLabel = `${DAYS_JP[dow]}曜 ${new Date(dateStr).getMonth()+1}/${new Date(dateStr).getDate()} の配置`;
+    makeCopyDraggable(btn, 'day', dateStr, dayLabel, () => openDayCopy(dateStr));
+    grid.appendChild(head);
+  }
+
+  const headNote = document.createElement('div');
+  headNote.className = 'head';
+  headNote.textContent = '備考';
+  grid.appendChild(headNote);
+
+  // Body rows
+  state.sites.forEach((site, rowIdx) => {
+    const rowCls = `row-${rowIdx % 2}`;
+
+    const row = document.createElement('div');
+    row.className = 'site-row';
+    row.dataset.siteId = site.id;
+
+    // Site name cell
+    const siteCell = document.createElement('div');
+    siteCell.className = `site-name ${rowCls}`;
+
+    const handle = document.createElement('span');
+    handle.className = 'site-drag-handle';
+    handle.innerHTML = '⋮⋮';
+    handle.title = 'ドラッグして並び替え';
+    siteCell.appendChild(handle);
+
+    const copyBtn = document.createElement('button');
+    copyBtn.className = 'site-copy-handle';
+    copyBtn.innerHTML = '📋';
+    copyBtn.title = '他の現場にドラッグしてコピー';
+    siteCell.appendChild(copyBtn);
+    makeCopyDraggable(copyBtn, 'site', site.id, `${site.name} の1週間配置`, null);
+
+    const inner = document.createElement('div');
+    inner.className = 'site-name-inner';
+    inner.contentEditable = editMode ? 'true' : 'false';
+    inner.innerHTML = `<span class="site-label">${escapeHtml(site.name)}</span>${site.period ? `<span class="period">${escapeHtml(site.period)}</span>` : ''}`;
+    inner.dataset.siteId = site.id;
+    inner.addEventListener('blur', onSiteNameBlur);
+    inner.addEventListener('click', (e) => {
+      if (editMode) return;
+      if (Sortable.active) return;
+      openColorPicker('site', site.id);
+    });
+    siteCell.appendChild(inner);
+
+    // Apply site color
+    const siteColor = state.labelColors && state.labelColors['site:' + site.id];
+    if (siteColor) {
+      siteCell.style.background = siteColor;
+      const txtColor = textColorFor(siteColor);
+      siteCell.style.color = txtColor;
+      siteCell.style.setProperty('--period-color', txtColor === '#fff' ? 'rgba(255,255,255,0.75)' : '#666');
+      siteCell.classList.add('has-color');
+    }
+
+    if (editMode) {
+      const del = document.createElement('button');
+      del.className = 'site-del';
+      del.textContent = '×';
+      del.onclick = () => deleteSite(site.id);
+      siteCell.appendChild(del);
+    }
+    row.appendChild(siteCell);
+
+    // Day cells
+    for (let i = 0; i < 7; i++) {
+      const dateStr = addDays(state.weekStart, i);
+      row.appendChild(makeCell(site.id, dateStr, rowCls));
+    }
+
+    // Notes cell
+    row.appendChild(makeCell(site.id, '__note__', rowCls));
+    grid.appendChild(row);
+  });
+
+  // Sortable for site row reorder
+  if (grid._sortable) grid._sortable.destroy();
+  grid._sortable = Sortable.create(grid, {
+    draggable: '.site-row',
+    handle: '.site-drag-handle',
+    animation: 50,
+    ghostClass: 'dragging',
+    onUpdate: () => {
+      const ids = Array.from(grid.querySelectorAll('.site-row')).map(r => r.dataset.siteId);
+      const idMap = Object.fromEntries(state.sites.map(s => [s.id, s]));
+      state.sites = ids.map(id => idMap[id]).filter(Boolean);
+      saveState();
+      render();
+    },
+  });
+}
+
+function makeCell(siteId, dateStr, rowCls) {
+  const cell = document.createElement('div');
+  cell.className = `cell ${rowCls}`;
+  cell.dataset.siteId = siteId;
+  cell.dataset.date = dateStr;
+  cell.dataset.cellKey = `${siteId}|${dateStr}`;
+
+  const data = getCellData(siteId, dateStr);
+
+  const personCount = (data.magnets || []).filter(m => m.type === 'person').length;
+  if (personCount > 0) {
+    const badge = document.createElement('div');
+    badge.className = 'cell-headcount';
+    badge.textContent = personCount;
+    cell.appendChild(badge);
+  }
+
+  const list = document.createElement('div');
+  list.className = 'magnet-list';
+  list.dataset.siteId = siteId;
+  list.dataset.date = dateStr;
+  data.magnets.forEach(m => list.appendChild(makeMagnet(m)));
+  cell.appendChild(list);
+
+  const note = document.createElement('div');
+  note.className = 'cell-note';
+  note.contentEditable = 'true';
+  note.textContent = data.note || '';
+  note.dataset.siteId = siteId;
+  note.dataset.date = dateStr;
+  note.addEventListener('blur', onNoteBlur);
+  cell.appendChild(note);
+
+  // Make magnet list sortable
+  Sortable.create(list, {
+    group: 'magnets',
+    animation: 50,
+    delay: 80,
+    delayOnTouchOnly: true,
+    touchStartThreshold: 4,
+    onAdd: onMagnetAdd,
+    onUpdate: onMagnetMove,
+    onRemove: onMagnetRemove,
+  });
+
+  // Cell copy handle
+  const copyBtn = document.createElement('button');
+  copyBtn.className = 'cell-copy-handle';
+  copyBtn.innerHTML = '📋';
+  copyBtn.title = '他のマスにドラッグしてコピー';
+  cell.appendChild(copyBtn);
+  const site = state.sites.find(s => s.id === siteId);
+  const siteName = site ? site.name : siteId;
+  let dateLabel;
+  if (dateStr === '__note__') dateLabel = '備考';
+  else {
+    const d = new Date(dateStr);
+    dateLabel = `${DAYS_JP[d.getDay()]}曜 ${d.getMonth()+1}/${d.getDate()}`;
+  }
+  makeCopyDraggable(copyBtn, 'cell', cell.dataset.cellKey, `${siteName} (${dateLabel})`, null);
+
+  return cell;
+}
+
+function makeMagnet(m) {
+  const el = document.createElement('div');
+  el.className = 'magnet';
+  el.dataset.type = m.type;
+  el.dataset.label = m.label;
+  el.dataset.id = m.id;
+  if (m.type === 'person') el.dataset.kind = getPersonKind(m.label);
+  el.innerHTML = `<span>${escapeHtml(m.label)}</span><span class="del" onclick="event.stopPropagation(); deleteMagnetFromCell(this.parentElement)">×</span>`;
+  applyMagnetColor(el, m.type, m.label);
+  el.addEventListener('click', (e) => {
+    if (e.target.classList.contains('del')) return;
+    if (Sortable.active) return;
+    openColorPicker(m.type, m.label);
+  });
+  return el;
+}
+
+function renderPool() {
+  document.querySelectorAll('.pool-tab').forEach(t => {
+    t.classList.toggle('active', t.dataset.type === activeTab);
+  });
+  const pool = document.getElementById('pool-items');
+  pool.innerHTML = '';
+
+  function makePoolMagnet(label) {
+    const el = document.createElement('div');
+    el.className = 'magnet';
+    el.dataset.type = activeTab;
+    el.dataset.label = label;
+    if (activeTab === 'person') el.dataset.kind = getPersonKind(label);
+    el.innerHTML = `<span>${escapeHtml(label)}</span>${editMode ? '<span class="del" onclick="event.stopPropagation(); deletePoolLabel(\''+escapeAttr(label)+'\')">×</span>' : ''}`;
+    applyMagnetColor(el, activeTab, label);
+    el.addEventListener('click', (e) => {
+      if (e.target.classList.contains('del')) return;
+      if (Sortable.active) return;
+      openColorPicker(activeTab, label);
+    });
+    return el;
+  }
+
+  function appendSection(title, items) {
+    if (items.length === 0) return;
+    const h = document.createElement('div');
+    h.className = 'pool-section-header';
+    h.innerHTML = `${escapeHtml(title)}<span class="count">(${items.length})</span>`;
+    pool.appendChild(h);
+    items.forEach(label => pool.appendChild(makePoolMagnet(label)));
+  }
+
+  if (activeTab === 'person') {
+    const labels = state.labels.person || [];
+    const jp = labels.filter(n => getPersonKind(n) === 'jp');
+    const tr = labels.filter(n => getPersonKind(n) === 'trainee');
+    appendSection('日本人', jp);
+    appendSection('実習生', tr);
+  } else {
+    const labels = state.labels[activeTab] || [];
+    labels.forEach(label => pool.appendChild(makePoolMagnet(label)));
+  }
+
+  if (pool._sortable) pool._sortable.destroy();
+  pool._sortable = Sortable.create(pool, {
+    group: { name: 'magnets', pull: 'clone', put: false },
+    sort: editMode,
+    animation: 50,
+    delay: editMode ? 60 : 80,
+    delayOnTouchOnly: true,
+    touchStartThreshold: 4,
+    draggable: '.magnet',
+    onUpdate: () => {
+      const labels = Array.from(pool.querySelectorAll('.magnet')).map(el => el.dataset.label);
+      state.labels[activeTab] = labels;
+      saveState();
+      render();
+    },
+  });
+}
+
+// ========== Cell data ==========
+function getCellData(siteId, dateStr) {
+  if (!state.schedule[siteId]) state.schedule[siteId] = {};
+  if (!state.schedule[siteId][dateStr]) state.schedule[siteId][dateStr] = { magnets: [], note: '' };
+  return state.schedule[siteId][dateStr];
+}
+
+function readCellFromDom(siteId, dateStr) {
+  const list = document.querySelector(`.magnet-list[data-site-id="${siteId}"][data-date="${dateStr}"]`);
+  if (!list) return;
+  const data = getCellData(siteId, dateStr);
+  data.magnets = Array.from(list.querySelectorAll('.magnet')).map(el => ({
+    id: el.dataset.id || genId(),
+    type: el.dataset.type,
+    label: el.dataset.label,
+  }));
+  // Re-sync ids onto DOM (in case some came from pool clones)
+  Array.from(list.querySelectorAll('.magnet')).forEach((el, i) => {
+    if (!el.dataset.id) el.dataset.id = data.magnets[i].id;
+  });
+}
+
+// ========== Sortable handlers ==========
+function onMagnetAdd(evt) {
+  const item = evt.item;
+  if (!item.dataset.id) item.dataset.id = genId();
+  // Refresh delete button (clone from pool doesn't have it)
+  if (!item.querySelector('.del')) {
+    const del = document.createElement('span');
+    del.className = 'del';
+    del.textContent = '×';
+    del.onclick = (e) => { e.stopPropagation(); deleteMagnetFromCell(item); };
+    item.appendChild(del);
+  }
+  syncFromDom(evt.to);
+  if (evt.from && evt.from !== evt.to) syncFromDom(evt.from);
+}
+function onMagnetMove(evt) {
+  syncFromDom(evt.to);
+}
+function onMagnetRemove(evt) {
+  syncFromDom(evt.from);
+}
+function syncFromDom(list) {
+  if (!list || !list.dataset.siteId) return;
+  readCellFromDom(list.dataset.siteId, list.dataset.date);
+  saveState();
+  updateHeadcounts();
+}
+
+function updateHeadcounts() {
+  document.querySelectorAll('.cell[data-site-id][data-date]').forEach(cell => {
+    const siteId = cell.dataset.siteId;
+    const date = cell.dataset.date;
+    const data = state.schedule[siteId] && state.schedule[siteId][date];
+    const count = data && data.magnets ? data.magnets.filter(m => m.type === 'person').length : 0;
+    let badge = cell.querySelector(':scope > .cell-headcount');
+    if (count > 0) {
+      if (!badge) {
+        badge = document.createElement('div');
+        badge.className = 'cell-headcount';
+        cell.appendChild(badge);
+      }
+      badge.textContent = count;
+    } else if (badge) {
+      badge.remove();
+    }
+  });
+  for (let i = 0; i < 7; i++) {
+    const dateStr = addDays(state.weekStart, i);
+    let total = 0;
+    state.sites.forEach(s => {
+      const c = state.schedule[s.id] && state.schedule[s.id][dateStr];
+      if (c && c.magnets) total += c.magnets.filter(m => m.type === 'person').length;
+    });
+    const head = document.querySelector(`.head[data-date="${dateStr}"]`);
+    if (!head) continue;
+    let totalEl = head.querySelector('.day-total');
+    if (total > 0) {
+      if (!totalEl) {
+        totalEl = document.createElement('span');
+        totalEl.className = 'day-total';
+        const copyBtn = head.querySelector('.day-copy-btn');
+        if (copyBtn) head.insertBefore(totalEl, copyBtn);
+        else head.appendChild(totalEl);
+      }
+      totalEl.textContent = `計${total}人`;
+    } else if (totalEl) {
+      totalEl.remove();
+    }
+  }
+}
+
+function deleteMagnetFromCell(magnetEl) {
+  const list = magnetEl.parentElement;
+  magnetEl.remove();
+  syncFromDom(list);
+}
+
+// ========== Events ==========
+function onNoteBlur(e) {
+  const el = e.target;
+  const data = getCellData(el.dataset.siteId, el.dataset.date);
+  data.note = el.textContent.trim();
+  saveState();
+}
+function onSiteNameBlur(e) {
+  const el = e.target;
+  const site = state.sites.find(s => s.id === el.dataset.siteId);
+  if (!site) return;
+  const labelEl = el.querySelector('.site-label');
+  const periodEl = el.querySelector('.period');
+  if (labelEl) site.name = labelEl.textContent.trim();
+  if (periodEl) site.period = periodEl.textContent.trim();
+  saveState();
+}
+
+// ========== Pool / sites mgmt ==========
+function switchTab(t) {
+  activeTab = t;
+  renderPool();
+}
+
+async function addPoolItem() {
+  const label = await prompt2(`${tabName(activeTab)}を追加`, '名前 / ラベル');
+  if (!label) return;
+  state.labels[activeTab].push(label);
+  saveState();
+  renderPool();
+}
+
+function deletePoolLabel(label) {
+  if (!confirm(`「${label}」をプールから削除しますか？（配置済みのものは残ります）`)) return;
+  state.labels[activeTab] = state.labels[activeTab].filter(l => l !== label);
+  saveState();
+  renderPool();
+}
+
+async function addSite() {
+  const name = await prompt2('現場を追加', '現場名');
+  if (!name) return;
+  const period = await prompt2('現場を追加', '期間 (例: 5/4〜9/末)', '');
+  state.sites.push({ id: genId(), name, period: period || '' });
+  saveState();
+  render();
+}
+
+function deleteSite(id) {
+  const site = state.sites.find(s => s.id === id);
+  if (!site) return;
+  if (!confirm(`現場「${site.name}」を削除しますか？（配置データもすべて消えます）`)) return;
+  state.sites = state.sites.filter(s => s.id !== id);
+  delete state.schedule[id];
+  saveState();
+  render();
+}
+
+function toggleEditMode() {
+  editMode = !editMode;
+  render();
+}
+
+// ========== Export / Import ==========
+function exportData() {
+  const blob = new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `genba-board-${new Date().toISOString().slice(0,10)}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function exportPDF() {
+  const oldTitle = document.title;
+  const start = formatDate(state.weekStart);
+  const end = formatDate(addDays(state.weekStart, 6));
+  document.title = `現場配置ボード ${start}〜${end}`;
+  setTimeout(() => {
+    window.print();
+    setTimeout(() => { document.title = oldTitle; }, 100);
+  }, 30);
+}
+function importData() {
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = 'application/json';
+  input.onchange = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const obj = JSON.parse(reader.result);
+        if (!obj.sites || !obj.labels) throw new Error('形式が違います');
+        state = obj;
+        saveState();
+        render();
+      } catch(err) {
+        alert('読み込みに失敗: ' + err.message);
+      }
+    };
+    reader.readAsText(file);
+  };
+  input.click();
+}
+function resetAll() {
+  if (!confirm('すべての配置・現場・マグネットを初期状態に戻します。よろしいですか？')) return;
+  state = initialState();
+  saveState();
+  render();
+}
+
+// ========== Modal (async prompt) ==========
+function prompt2(title, placeholder, defaultValue = '') {
+  return new Promise(resolve => {
+    document.getElementById('modal-title').textContent = title;
+    const input = document.getElementById('modal-input');
+    input.placeholder = placeholder;
+    input.value = defaultValue;
+    document.getElementById('modal-bg').classList.add('show');
+    setTimeout(() => input.focus(), 50);
+    modalResolver = resolve;
+  });
+}
+function closeModal() {
+  document.getElementById('modal-bg').classList.remove('show');
+  if (modalResolver) { modalResolver(null); modalResolver = null; }
+}
+function confirmModal() {
+  const v = document.getElementById('modal-input').value.trim();
+  document.getElementById('modal-bg').classList.remove('show');
+  if (modalResolver) { modalResolver(v); modalResolver = null; }
+}
+document.getElementById('modal-input').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') confirmModal();
+  if (e.key === 'Escape') closeModal();
+});
+
+// ========== Utils ==========
+function genId() { return 'id_' + Math.random().toString(36).slice(2, 10); }
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+function escapeAttr(s) { return escapeHtml(s).replace(/'/g,"\\'"); }
+function tabName(t) { return { person: '人員', equipment: '重機', vehicle: '車両' }[t] || t; }
+
+// ========== Color picker ==========
+const COLOR_PRESETS = [
+  '#c0392b', '#e94747', '#ff6b6b', '#ff8fa3', '#ffc1d4', '#ffffff',
+  '#e67e22', '#f39c12', '#f5c518', '#ffd93d', '#fff59d', '#ecf0f1',
+  '#27ae60', '#2ecc71', '#3498db', '#5dade2', '#9b59b6', '#95a5a6',
+  '#2c3e50', '#34495e', '#7f8c8d', '#000000', '#8b4513', '#ff7f50',
+];
+let colorPickerTarget = null;
+
+function textColorFor(bg) {
+  if (!bg) return '';
+  const m = bg.replace('#', '');
+  const r = parseInt(m.slice(0,2), 16);
+  const g = parseInt(m.slice(2,4), 16);
+  const b = parseInt(m.slice(4,6), 16);
+  const lum = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+  return lum > 0.62 ? '#222' : '#fff';
+}
+
+function getEquipDefaultColor(label) {
+  const m = label.match(/\s(\d+(?:\.\d+)?)$/);
+  return m ? (EQUIP_CAPACITY_COLORS[m[1]] || null) : null;
+}
+
+function applyMagnetColor(el, type, label) {
+  let color = state.labelColors && state.labelColors[type + ':' + label];
+  if (!color && type === 'equipment') color = getEquipDefaultColor(label);
+  if (color) {
+    el.style.background = color;
+    el.style.backgroundImage = 'none';
+    el.style.color = textColorFor(color);
+    el.style.border = (color.toLowerCase() === '#ffffff' || color.toLowerCase() === '#fff')
+      ? '1px solid #999' : '1px solid rgba(0,0,0,0.15)';
+  } else {
+    el.style.background = '';
+    el.style.backgroundImage = '';
+    el.style.color = '';
+    el.style.border = '';
+  }
+}
+
+function openColorPicker(type, label) {
+  colorPickerTarget = { type, label };
+  const current = state.labelColors[type + ':' + label] || '';
+  const target = document.getElementById('color-target');
+  const preview = document.createElement('span');
+  preview.className = 'preview-magnet';
+  preview.dataset.type = type;
+  if (type === 'person') preview.dataset.kind = getPersonKind(label);
+  let previewText = label;
+  if (type === 'site') {
+    const site = state.sites.find(s => s.id === label);
+    if (site) previewText = site.name;
+  }
+  preview.textContent = previewText;
+  if (current) {
+    preview.style.background = current;
+    preview.style.color = textColorFor(current);
+  } else if (type === 'equipment') {
+    const capColor = getEquipDefaultColor(label) || '#FFFFFF';
+    preview.style.background = capColor;
+    preview.style.color = textColorFor(capColor);
+    preview.style.border = '1px solid #999';
+  } else {
+    const defaults = {
+      person: { bg: 'linear-gradient(180deg, #ff7373 0%, #e94747 100%)', color: '#fff' },
+      vehicle: { bg: 'linear-gradient(180deg, #fff 0%, #e8e8e8 100%)', color: '#222' },
+      site: { bg: '#f8f8f4', color: '#222' },
+    };
+    const d = defaults[type] || defaults.person;
+    preview.style.background = d.bg;
+    preview.style.color = d.color;
+    if (type === 'vehicle' || type === 'site') preview.style.border = '1px solid #999';
+  }
+  target.innerHTML = '対象：';
+  target.appendChild(preview);
+
+  // Name edit row
+  const nameRow = document.getElementById('name-edit-row');
+  const nameInput = document.getElementById('name-edit-input');
+  nameRow.style.display = '';
+  if (type === 'site') {
+    const site = state.sites.find(s => s.id === label);
+    nameInput.value = site ? site.name : label;
+  } else {
+    nameInput.value = label;
+  }
+
+  // Meta info (equipment/vehicle)
+  const metaWrap = document.getElementById('meta-info');
+  let meta = null;
+  if (type === 'equipment') meta = EQUIPMENT_META[label];
+  else if (type === 'vehicle') meta = VEHICLE_META[label];
+  if (meta) {
+    let rows = '';
+    if (meta.no !== undefined) rows += `<tr><td class="k">No.</td><td class="v">${meta.no}</td></tr>`;
+    if (meta.type) rows += `<tr><td class="k">品名</td><td class="v">${escapeHtml(meta.type)}</td></tr>`;
+    if (meta.model) rows += `<tr><td class="k">型式</td><td class="v">${escapeHtml(meta.model)}</td></tr>`;
+    if (meta.mfr) rows += `<tr><td class="k">メーカー</td><td class="v">${escapeHtml(meta.mfr)}</td></tr>`;
+    if (meta.plate) rows += `<tr><td class="k">登録番号</td><td class="v">${escapeHtml(meta.plate)}</td></tr>`;
+    if (meta.driver) rows += `<tr><td class="k">担当</td><td class="v">${escapeHtml(meta.driver)}</td></tr>`;
+    metaWrap.innerHTML = `<table>${rows}</table>${meta.note ? `<div class="note">${escapeHtml(meta.note)}</div>` : ''}`;
+    metaWrap.style.display = '';
+  } else {
+    metaWrap.style.display = 'none';
+    metaWrap.innerHTML = '';
+  }
+
+  // Kind toggle (person only)
+  const kindWrap = document.getElementById('kind-toggle-wrap');
+  if (type === 'person') {
+    kindWrap.style.display = '';
+    const k = getPersonKind(label);
+    document.getElementById('kind-jp').classList.toggle('active', k === 'jp');
+    document.getElementById('kind-trainee').classList.toggle('active', k === 'trainee');
+  } else {
+    kindWrap.style.display = 'none';
+  }
+
+  const grid = document.getElementById('color-grid');
+  grid.innerHTML = '';
+  COLOR_PRESETS.forEach(c => {
+    const sw = document.createElement('div');
+    sw.className = 'color-swatch' + (c.toLowerCase() === current.toLowerCase() ? ' selected' : '');
+    sw.style.background = c;
+    sw.title = c;
+    sw.onclick = () => setLabelColor(c);
+    grid.appendChild(sw);
+  });
+
+  document.getElementById('color-custom-input').value = /^#[0-9a-f]{6}$/i.test(current) ? current : '#ff6b6b';
+  document.getElementById('color-modal').classList.add('show');
+}
+
+function closeColorPicker() {
+  document.getElementById('color-modal').classList.remove('show');
+  colorPickerTarget = null;
+}
+
+function applyRename() {
+  if (!colorPickerTarget) return;
+  const { type, label } = colorPickerTarget;
+  const newName = document.getElementById('name-edit-input').value.trim();
+  if (!newName) { alert('名前を入力してください'); return; }
+
+  if (type === 'site') {
+    if (newName === label) return;
+    const site = state.sites.find(s => s.id === label);
+    if (!site) return;
+    if (newName === site.name) return;
+    site.name = newName;
+    saveState();
+    render();
+    const preview = document.querySelector('#color-target .preview-magnet');
+    if (preview) preview.textContent = newName;
+    return;
+  }
+
+  if (newName === label) return;
+  if (state.labels[type] && state.labels[type].includes(newName)) {
+    alert(`「${newName}」は既に存在します`);
+    return;
+  }
+  const idx = state.labels[type] ? state.labels[type].indexOf(label) : -1;
+  if (idx !== -1) state.labels[type][idx] = newName;
+
+  const oldKey = `${type}:${label}`;
+  const newKey = `${type}:${newName}`;
+  if (state.labelColors && state.labelColors[oldKey] !== undefined) {
+    state.labelColors[newKey] = state.labelColors[oldKey];
+    delete state.labelColors[oldKey];
+  }
+  if (type === 'person' && state.personKind && state.personKind[label] !== undefined) {
+    state.personKind[newName] = state.personKind[label];
+    delete state.personKind[label];
+  }
+  Object.values(state.schedule || {}).forEach(siteSched => {
+    Object.values(siteSched || {}).forEach(cell => {
+      if (cell && cell.magnets) {
+        cell.magnets.forEach(m => {
+          if (m.type === type && m.label === label) m.label = newName;
+        });
+      }
+    });
+  });
+
+  colorPickerTarget.label = newName;
+  saveState();
+  render();
+
+  const preview = document.querySelector('#color-target .preview-magnet');
+  if (preview) preview.textContent = newName;
+}
+
+function setLabelColor(color) {
+  if (!colorPickerTarget) return;
+  const { type, label } = colorPickerTarget;
+  if (!state.labelColors) state.labelColors = {};
+  state.labelColors[type + ':' + label] = color;
+  saveState();
+  closeColorPicker();
+  render();
+}
+
+function resetColorToDefault() {
+  if (!colorPickerTarget) return;
+  const { type, label } = colorPickerTarget;
+  if (state.labelColors) delete state.labelColors[type + ':' + label];
+  saveState();
+  closeColorPicker();
+  render();
+}
+
+document.getElementById('color-custom-input').addEventListener('change', (e) => {
+  setLabelColor(e.target.value);
+});
+document.getElementById('name-edit-input').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') { e.preventDefault(); applyRename(); }
+});
+document.getElementById('color-modal').addEventListener('click', (e) => {
+  if (e.target.id === 'color-modal') closeColorPicker();
+});
+
+// ========== Person kind ==========
+const KATAKANA_TRAINEES = ['デラ','トビ','トピ','アディ','ハリム'];
+
+function getPersonKind(name) {
+  if (state.personKind && state.personKind[name]) return state.personKind[name];
+  // Auto: 全てアルファベット大文字（DUY, TIEN等）は実習生として扱う
+  if (/^[A-Z][A-Z0-9 ]*$/.test(name)) return 'trainee';
+  if (KATAKANA_TRAINEES.includes(name)) return 'trainee';
+  return 'jp';
+}
+
+function setLabelKind(kind) {
+  if (!colorPickerTarget) return;
+  const { type, label } = colorPickerTarget;
+  if (type !== 'person') return;
+  if (!state.personKind) state.personKind = {};
+  state.personKind[label] = kind;
+  saveState();
+  document.getElementById('kind-jp').classList.toggle('active', kind === 'jp');
+  document.getElementById('kind-trainee').classList.toggle('active', kind === 'trainee');
+  const preview = document.querySelector('#color-target .preview-magnet');
+  if (preview) preview.dataset.kind = kind;
+  render();
+}
+
+// ========== View filter ==========
+function setViewFilter(filter, keepListOpen) {
+  state.viewFilter = filter;
+  saveState();
+  applyFilterClass();
+  updateFilterButtons();
+  if (keepListOpen) renderListTable();
+}
+
+// ========== List view ==========
+function openListView() {
+  document.getElementById('list-modal').classList.add('show');
+  renderListTable();
+}
+function closeListView() {
+  document.getElementById('list-modal').classList.remove('show');
+}
+document.getElementById('list-modal').addEventListener('click', (e) => {
+  if (e.target.id === 'list-modal') closeListView();
+});
+
+function renderListTable() {
+  const tbl = document.getElementById('list-table');
+  const search = (document.getElementById('list-search').value || '').toLowerCase().trim();
+  const filter = state.viewFilter;
+
+  // Week label
+  const weekEnd = addDays(state.weekStart, 6);
+  document.getElementById('list-week-label').textContent =
+    `${formatDate(state.weekStart)} 〜 ${formatDate(weekEnd)}`;
+
+  // Sync filter buttons inside list modal
+  updateFilterButtons();
+
+  // Build header
+  const days = [];
+  for (let i = 0; i < 7; i++) days.push(addDays(state.weekStart, i));
+
+  let html = '<thead><tr><th class="name-col">氏名</th>';
+  days.forEach(d => {
+    const dow = dayOfWeek(d);
+    const cls = dow === 0 ? 'sun' : dow === 6 ? 'sat' : '';
+    html += `<th class="${cls}">${DAYS_JP[dow]} ${formatDate(d)}</th>`;
+  });
+  html += '<th>稼働日数</th></tr></thead><tbody>';
+
+  // Build rows: person labels filtered by kind + search
+  const persons = state.labels.person.filter(name => {
+    if (search && !name.toLowerCase().includes(search)) return false;
+    const k = getPersonKind(name);
+    if (filter === 'jp' && k !== 'jp') return false;
+    if (filter === 'trainee' && k !== 'trainee') return false;
+    return true;
+  });
+
+  if (persons.length === 0) {
+    html += '<tr><td colspan="9" style="text-align:center;color:#999;padding:20px;">該当するマグネットがありません</td></tr>';
+  }
+
+  persons.forEach(name => {
+    const kind = getPersonKind(name);
+    html += `<tr class="row-${kind === 'trainee' ? 'trainee' : 'jp'}"><td class="name">${escapeHtml(name)}</td>`;
+    let workDays = 0;
+    days.forEach(date => {
+      const sites = [];
+      state.sites.forEach(site => {
+        const cell = state.schedule[site.id] && state.schedule[site.id][date];
+        if (cell && cell.magnets && cell.magnets.some(m => m.type === 'person' && m.label === name)) {
+          sites.push(site.name);
+        }
+      });
+      if (sites.length > 0) {
+        workDays++;
+        const conflictCls = sites.length > 1 ? ' conflict' : '';
+        html += `<td class="${conflictCls}">${sites.map(s => `<span class="site-tag">${escapeHtml(s)}</span>`).join('')}</td>`;
+      } else {
+        html += '<td class="empty">—</td>';
+      }
+    });
+    html += `<td style="text-align:center;font-weight:bold;">${workDays}</td></tr>`;
+  });
+
+  // Equipment summary section
+  const equipmentSummary = [];
+  state.labels.equipment.forEach(name => {
+    if (search && !name.toLowerCase().includes(search)) return;
+    if (filter === 'jp' || filter === 'trainee') return; // Equipment shown only in 'all'
+    const row = { name, sites: [] };
+    let used = 0;
+    days.forEach(date => {
+      const sites = [];
+      state.sites.forEach(site => {
+        const cell = state.schedule[site.id] && state.schedule[site.id][date];
+        if (cell && cell.magnets && cell.magnets.some(m => m.type === 'equipment' && m.label === name)) {
+          sites.push(site.name);
+        }
+      });
+      row.sites.push(sites);
+      if (sites.length > 0) used++;
+    });
+    if (used > 0) equipmentSummary.push({ ...row, used });
+  });
+
+  if (equipmentSummary.length > 0) {
+    html += `<tr><td colspan="9" style="background:#f0f0e8;padding:8px;font-weight:bold;font-size:12px;">▼ 重機・車両（稼働分のみ）</td></tr>`;
+    equipmentSummary.forEach(row => {
+      html += `<tr><td class="name" style="background:#fffaeb;">${escapeHtml(row.name)}</td>`;
+      row.sites.forEach(sites => {
+        if (sites.length > 0) {
+          const conflictCls = sites.length > 1 ? ' conflict' : '';
+          html += `<td class="${conflictCls}">${sites.map(s => `<span class="site-tag">${escapeHtml(s)}</span>`).join('')}</td>`;
+        } else {
+          html += '<td class="empty">—</td>';
+        }
+      });
+      html += `<td style="text-align:center;font-weight:bold;">${row.used}</td></tr>`;
+    });
+  }
+
+  html += '</tbody>';
+  tbl.innerHTML = html;
+}
+
+// ========== Drag-to-copy (day/site/cell) ==========
+const COPY_DRAG_CONFIG = {
+  day:  { selector: '.head[data-date]',         keyAttr: 'date' },
+  site: { selector: '.site-row[data-site-id]',  keyAttr: 'siteId' },
+  cell: { selector: '.cell[data-cell-key]',     keyAttr: 'cellKey' },
+};
+
+function makeCopyDraggable(el, type, key, ghostLabel, tapCallback) {
+  el.addEventListener('pointerdown', (e) => {
+    if (e.button !== undefined && e.button !== 0) return;
+    const startX = e.clientX, startY = e.clientY;
+    let isDragging = false;
+    let ghost = null;
+    let currentTarget = null;
+    const cfg = COPY_DRAG_CONFIG[type];
+    const dropSelector = cfg.selector;
+    const keyAttr = cfg.keyAttr;
+
+    const onMove = (ev) => {
+      const dx = ev.clientX - startX, dy = ev.clientY - startY;
+      if (!isDragging && Math.hypot(dx, dy) > 8) {
+        isDragging = true;
+        ghost = document.createElement('div');
+        ghost.className = 'copy-drag-ghost';
+        ghost.textContent = ghostLabel;
+        document.body.appendChild(ghost);
+        document.querySelectorAll(dropSelector).forEach(t => {
+          if (t.dataset[keyAttr] !== key) t.classList.add('copy-drop-zone');
+        });
+      }
+      if (isDragging) {
+        ghost.style.left = (ev.clientX + 14) + 'px';
+        ghost.style.top = (ev.clientY + 14) + 'px';
+        const under = document.elementFromPoint(ev.clientX, ev.clientY);
+        const tgt = under ? under.closest(dropSelector) : null;
+        const valid = tgt && tgt.dataset[keyAttr] !== key ? tgt : null;
+        if (currentTarget && currentTarget !== valid) currentTarget.classList.remove('copy-drop-active');
+        currentTarget = valid;
+        if (currentTarget) currentTarget.classList.add('copy-drop-active');
+      }
+    };
+
+    const onUp = (ev) => {
+      document.removeEventListener('pointermove', onMove);
+      document.removeEventListener('pointerup', onUp);
+      document.removeEventListener('pointercancel', onUp);
+      if (isDragging) {
+        if (ghost) ghost.remove();
+        document.querySelectorAll('.copy-drop-zone').forEach(t => t.classList.remove('copy-drop-zone'));
+        document.querySelectorAll('.copy-drop-active').forEach(t => t.classList.remove('copy-drop-active'));
+        if (currentTarget) {
+          executeCopyDragAction(type, key, currentTarget.dataset[keyAttr]);
+        }
+        ev.preventDefault();
+        ev.stopPropagation();
+      } else if (tapCallback) {
+        tapCallback();
+      }
+    };
+
+    document.addEventListener('pointermove', onMove);
+    document.addEventListener('pointerup', onUp);
+    document.addEventListener('pointercancel', onUp);
+    e.preventDefault();
+  });
+}
+
+function executeCopyDragAction(type, srcKey, destKey) {
+  if (type === 'day') {
+    const srcD = new Date(srcKey), destD = new Date(destKey);
+    if (!confirm(`${srcD.getMonth()+1}/${srcD.getDate()} の配置を ${destD.getMonth()+1}/${destD.getDate()} に上書きコピーしますか？`)) return;
+    state.sites.forEach(site => {
+      if (!state.schedule[site.id]) state.schedule[site.id] = {};
+      const srcCell = state.schedule[site.id][srcKey];
+      if (srcCell && ((srcCell.magnets && srcCell.magnets.length > 0) || srcCell.note)) {
+        state.schedule[site.id][destKey] = {
+          magnets: (srcCell.magnets || []).map(m => ({...m, id: genId()})),
+          note: srcCell.note || '',
+        };
+      } else {
+        state.schedule[site.id][destKey] = { magnets: [], note: '' };
+      }
+    });
+  } else if (type === 'site') {
+    const srcSite = state.sites.find(s => s.id === srcKey);
+    const destSite = state.sites.find(s => s.id === destKey);
+    if (!srcSite || !destSite) return;
+    if (!confirm(`「${srcSite.name}」の配置を「${destSite.name}」に上書きコピーしますか？`)) return;
+    const srcSched = state.schedule[srcKey] || {};
+    const newDest = {};
+    Object.entries(srcSched).forEach(([date, cell]) => {
+      newDest[date] = {
+        magnets: (cell.magnets || []).map(m => ({...m, id: genId()})),
+        note: cell.note || '',
+      };
+    });
+    state.schedule[destKey] = newDest;
+  } else if (type === 'cell') {
+    const [srcSiteId, srcDate] = srcKey.split('|');
+    const [destSiteId, destDate] = destKey.split('|');
+    if (srcSiteId === destSiteId && srcDate === destDate) return;
+    const srcSite = state.sites.find(s => s.id === srcSiteId);
+    const destSite = state.sites.find(s => s.id === destSiteId);
+    const labelFor = (sid, date) => {
+      const s = state.sites.find(x => x.id === sid);
+      const name = s ? s.name : sid;
+      if (date === '__note__') return `${name}（備考）`;
+      const d = new Date(date);
+      return `${name}（${DAYS_JP[d.getDay()]}曜 ${d.getMonth()+1}/${d.getDate()}）`;
+    };
+    if (!confirm(`${labelFor(srcSiteId, srcDate)} を ${labelFor(destSiteId, destDate)} に上書きコピーしますか？`)) return;
+    if (!state.schedule[destSiteId]) state.schedule[destSiteId] = {};
+    const srcCell = state.schedule[srcSiteId] && state.schedule[srcSiteId][srcDate];
+    if (srcCell && ((srcCell.magnets && srcCell.magnets.length > 0) || srcCell.note)) {
+      state.schedule[destSiteId][destDate] = {
+        magnets: (srcCell.magnets || []).map(m => ({...m, id: genId()})),
+        note: srcCell.note || '',
+      };
+    } else {
+      state.schedule[destSiteId][destDate] = { magnets: [], note: '' };
+    }
+  }
+  saveState();
+  render();
+}
+
+// ========== Day copy ==========
+let dayCopySource = null;
+
+function openDayCopy(srcDate) {
+  dayCopySource = srcDate;
+  const d = new Date(srcDate);
+  const dow = DAYS_JP[d.getDay()];
+  document.getElementById('day-copy-title').textContent =
+    `${dow}曜 ${d.getMonth()+1}/${d.getDate()} の配置をコピー`;
+
+  const opts = document.getElementById('day-copy-options');
+  opts.innerHTML = '';
+  for (let i = 0; i < 7; i++) {
+    const date = addDays(state.weekStart, i);
+    if (date === srcDate) continue;
+    const dd = new Date(date);
+    const ddow = dd.getDay();
+    const cls = ddow === 0 ? 'sun' : ddow === 6 ? 'sat' : '';
+    const row = document.createElement('label');
+    row.className = 'day-copy-row';
+    row.innerHTML = `<input type="checkbox" value="${date}"><span class="label ${cls}">${DAYS_JP[ddow]}曜 ${dd.getMonth()+1}/${dd.getDate()}</span>`;
+    opts.appendChild(row);
+  }
+  document.getElementById('day-copy-modal').classList.add('show');
+}
+
+function closeDayCopy() {
+  document.getElementById('day-copy-modal').classList.remove('show');
+  dayCopySource = null;
+}
+
+function executeDayCopy() {
+  if (!dayCopySource) return;
+  const dests = Array.from(document.querySelectorAll('#day-copy-options input:checked')).map(i => i.value);
+  if (dests.length === 0) { alert('コピー先を1つ以上選んでください'); return; }
+  const mode = document.querySelector('input[name="copy-mode"]:checked').value;
+
+  state.sites.forEach(site => {
+    if (!state.schedule[site.id]) state.schedule[site.id] = {};
+    const srcCell = state.schedule[site.id][dayCopySource];
+    if (!srcCell || (!srcCell.magnets || srcCell.magnets.length === 0) && !srcCell.note) {
+      // Empty source cell: in overwrite mode, also empty the dest
+      if (mode === 'overwrite') {
+        dests.forEach(d => { state.schedule[site.id][d] = { magnets: [], note: '' }; });
+      }
+      return;
+    }
+    dests.forEach(dest => {
+      if (mode === 'overwrite') {
+        state.schedule[site.id][dest] = {
+          magnets: (srcCell.magnets || []).map(m => ({...m, id: genId()})),
+          note: srcCell.note || '',
+        };
+      } else {
+        if (!state.schedule[site.id][dest]) state.schedule[site.id][dest] = { magnets: [], note: '' };
+        const cur = state.schedule[site.id][dest];
+        cur.magnets = [...(cur.magnets || []), ...(srcCell.magnets || []).map(m => ({...m, id: genId()}))];
+        if (srcCell.note) cur.note = cur.note ? `${cur.note} / ${srcCell.note}` : srcCell.note;
+      }
+    });
+  });
+  saveState();
+  closeDayCopy();
+  render();
+}
+
+document.getElementById('day-copy-modal').addEventListener('click', (e) => {
+  if (e.target.id === 'day-copy-modal') closeDayCopy();
+});
+
+// ========== Settings & Dropbox ==========
+let dbxFilePath = '/board.json';
+let dbxToken = null;
+let dbxAppKey = null;
+let dbxAutoSaveTimer = null;
+let dbxLastSync = null;
+
+function openSettings() {
+  const key = localStorage.getItem('dbx_app_key') || '';
+  document.getElementById('dbx-app-key').value = key;
+  document.getElementById('dbx-file-path').value = dbxFilePath;
+  document.getElementById('dbx-redirect-display').textContent = window.location.origin + window.location.pathname;
+  updateDbxUI();
+  document.getElementById('settings-modal').classList.add('show');
+}
+function closeSettings() {
+  document.getElementById('settings-modal').classList.remove('show');
+}
+document.getElementById('settings-modal').addEventListener('click', (e) => {
+  if (e.target.id === 'settings-modal') closeSettings();
+});
+
+function saveDbxAppKey() {
+  const key = document.getElementById('dbx-app-key').value.trim();
+  if (!key) { alert('App Keyを入力してください'); return; }
+  localStorage.setItem('dbx_app_key', key);
+  dbxAppKey = key;
+  alert('App Key を保存しました');
+  updateDbxUI();
+}
+
+function saveDbxFilePath() {
+  let path = document.getElementById('dbx-file-path').value.trim();
+  if (!path) path = '/board.json';
+  if (!path.startsWith('/')) path = '/' + path;
+  if (!path.toLowerCase().endsWith('.json')) {
+    if (!confirm(`「${path}」は .json で終わっていません。保存しますか？`)) return;
+  }
+  localStorage.setItem('dbx_file_path', path);
+  dbxFilePath = path;
+  document.getElementById('dbx-file-path').value = path;
+  alert('保存パスを更新しました: ' + path + '\n「↓最新取得」か「今すぐ同期」で動作確認してください。');
+}
+
+function updateDbxUI() {
+  const status = document.getElementById('dbx-status');
+  const statusText = document.getElementById('dbx-status-text');
+  const connectBtn = document.getElementById('dbx-connect-btn');
+  const disconnectBtn = document.getElementById('dbx-disconnect-btn');
+  const syncBtn = document.getElementById('dbx-sync-btn');
+  const pullBtn = document.getElementById('dbx-pull-btn');
+  const info = document.getElementById('dbx-info');
+
+  if (dbxToken) {
+    // 同期中・エラー中以外なら、最終同期時刻 or 接続中を表示
+    if (!status.classList.contains('syncing') && !status.classList.contains('error')) {
+      status.classList.add('connected');
+      if (dbxLastSync) statusText.textContent = '同期 ' + dbxLastSync;
+      else if (statusText.textContent === '未接続' || statusText.textContent === '同期中') statusText.textContent = '接続中';
+    }
+    if (connectBtn) connectBtn.style.display = 'none';
+    if (disconnectBtn) disconnectBtn.style.display = '';
+    if (syncBtn) syncBtn.style.display = '';
+    if (pullBtn) pullBtn.style.display = '';
+    if (info) info.textContent = dbxLastSync ? `最終同期: ${dbxLastSync}` : '接続済み（未同期）';
+  } else {
+    status.classList.remove('connected', 'syncing', 'error');
+    statusText.textContent = '未接続';
+    if (connectBtn) connectBtn.style.display = '';
+    if (disconnectBtn) disconnectBtn.style.display = 'none';
+    if (syncBtn) syncBtn.style.display = 'none';
+    if (pullBtn) pullBtn.style.display = 'none';
+    if (info) info.textContent = '';
+  }
+}
+
+function setDbxStatus(state, text) {
+  const s = document.getElementById('dbx-status');
+  const t = document.getElementById('dbx-status-text');
+  s.classList.remove('connected', 'syncing', 'error');
+  if (state === 'syncing') s.classList.add('syncing');
+  else if (state === 'error') s.classList.add('error');
+  else if (state === 'connected') s.classList.add('connected');
+  t.textContent = text;
+}
+
+// PKCE helpers
+function dbxRandom(n) {
+  const a = new Uint8Array(n);
+  crypto.getRandomValues(a);
+  return Array.from(a).map(b => ('0' + b.toString(16)).slice(-2)).join('');
+}
+async function dbxSha256B64Url(s) {
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s));
+  let str = '';
+  new Uint8Array(buf).forEach(b => { str += String.fromCharCode(b); });
+  return btoa(str).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
+async function dbxConnect() {
+  const appKey = localStorage.getItem('dbx_app_key');
+  if (!appKey) { alert('まず App Key を保存してください'); return; }
+  const verifier = dbxRandom(64);
+  const challenge = await dbxSha256B64Url(verifier);
+  localStorage.setItem('dbx_verifier', verifier);
+  const redirect = window.location.origin + window.location.pathname;
+  const url = 'https://www.dropbox.com/oauth2/authorize?' + new URLSearchParams({
+    client_id: appKey,
+    response_type: 'code',
+    redirect_uri: redirect,
+    code_challenge: challenge,
+    code_challenge_method: 'S256',
+    token_access_type: 'offline',
+  }).toString();
+  window.location.href = url;
+}
+
+async function dbxHandleCallback() {
+  const params = new URLSearchParams(window.location.search);
+  const code = params.get('code');
+  if (!code) return false;
+  const verifier = localStorage.getItem('dbx_verifier');
+  const appKey = localStorage.getItem('dbx_app_key');
+  if (!verifier || !appKey) {
+    history.replaceState({}, '', window.location.pathname);
+    return false;
+  }
+  const redirect = window.location.origin + window.location.pathname;
+  try {
+    const resp = await fetch('https://api.dropboxapi.com/oauth2/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        code,
+        grant_type: 'authorization_code',
+        client_id: appKey,
+        code_verifier: verifier,
+        redirect_uri: redirect,
+      }).toString(),
+    });
+    const data = await resp.json();
+    if (data.access_token) {
+      localStorage.setItem('dbx_token', data.access_token);
+      if (data.refresh_token) localStorage.setItem('dbx_refresh', data.refresh_token);
+      dbxToken = data.access_token;
+    } else {
+      console.error('Token exchange failed', data);
+    }
+  } catch(e) {
+    console.error(e);
+  }
+  localStorage.removeItem('dbx_verifier');
+  history.replaceState({}, '', window.location.pathname);
+  return true;
+}
+
+async function dbxRefreshToken() {
+  const refresh = localStorage.getItem('dbx_refresh');
+  const appKey = localStorage.getItem('dbx_app_key');
+  if (!refresh || !appKey) return false;
+  const resp = await fetch('https://api.dropboxapi.com/oauth2/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      grant_type: 'refresh_token',
+      refresh_token: refresh,
+      client_id: appKey,
+    }).toString(),
+  });
+  const data = await resp.json();
+  if (data.access_token) {
+    localStorage.setItem('dbx_token', data.access_token);
+    dbxToken = data.access_token;
+    return true;
+  }
+  return false;
+}
+
+function dbxDisconnect() {
+  if (!confirm('Dropboxとの接続を切りますか？（ローカルデータは残ります）')) return;
+  localStorage.removeItem('dbx_token');
+  localStorage.removeItem('dbx_refresh');
+  dbxToken = null;
+  dbxLastSync = null;
+  updateDbxUI();
+}
+
+function asciiEscapeJSON(obj) {
+  return JSON.stringify(obj).replace(/[-￿]/g, c =>
+    '\\u' + ('0000' + c.charCodeAt(0).toString(16)).slice(-4));
+}
+
+async function dbxApiCall(url, args, body) {
+  if (!dbxToken) return null;
+  const doFetch = () => fetch(url, {
+    method: 'POST',
+    headers: {
+      'Authorization': 'Bearer ' + dbxToken,
+      'Content-Type': body ? 'application/octet-stream' : 'application/x-www-form-urlencoded',
+      'Dropbox-API-Arg': asciiEscapeJSON(args),
+    },
+    body: body || undefined,
+  });
+  let resp = await doFetch();
+  if (resp.status === 401) {
+    const ok = await dbxRefreshToken();
+    if (ok) resp = await doFetch();
+  }
+  return resp;
+}
+
+async function dbxSave(silent) {
+  if (!dbxToken) { console.warn('[Dropbox] no token'); return false; }
+  try {
+    if (!silent) setDbxStatus('syncing', '保存中');
+    const resp = await dbxApiCall(
+      'https://content.dropboxapi.com/2/files/upload',
+      { path: dbxFilePath, mode: 'overwrite', mute: true, autorename: false },
+      JSON.stringify(state)
+    );
+    if (resp && resp.ok) {
+      const result = await resp.json().catch(() => null);
+      console.log('[Dropbox] saved to', result && result.path_display);
+      dbxLastSync = new Date().toLocaleTimeString('ja-JP');
+      setDbxStatus('connected', '同期 ' + dbxLastSync);
+      const info = document.getElementById('dbx-info');
+      if (info) info.textContent = '最終同期: ' + dbxLastSync + (result && result.path_display ? ` (${result.path_display})` : '');
+      return true;
+    } else {
+      const errText = resp ? await resp.text().catch(() => resp.statusText) : 'no response';
+      console.error('[Dropbox] save failed:', resp && resp.status, errText);
+      setDbxStatus('error', '失敗(' + (resp ? resp.status : '?') + ')');
+      const info = document.getElementById('dbx-info');
+      if (info) info.textContent = `エラー: HTTP ${resp ? resp.status : '?'} - ${errText.slice(0,200)}`;
+      return false;
+    }
+  } catch(e) {
+    console.error('[Dropbox] save error:', e);
+    setDbxStatus('error', 'エラー');
+    const info = document.getElementById('dbx-info');
+    if (info) info.textContent = 'エラー: ' + e.message;
+    return false;
+  }
+}
+
+async function dbxLoad() {
+  if (!dbxToken) { console.warn('[Dropbox] load: no token'); return null; }
+  try {
+    setDbxStatus('syncing', '取得中');
+    const resp = await dbxApiCall(
+      'https://content.dropboxapi.com/2/files/download',
+      { path: dbxFilePath },
+      null
+    );
+    if (resp && resp.ok) {
+      const json = await resp.json();
+      dbxLastSync = new Date().toLocaleTimeString('ja-JP');
+      setDbxStatus('connected', '同期 ' + dbxLastSync);
+      console.log('[Dropbox] loaded board.json');
+      return json;
+    } else if (resp && resp.status === 409) {
+      // ファイルなし
+      setDbxStatus('connected', '初回');
+      console.log('[Dropbox] no file yet');
+      return null;
+    } else {
+      const errText = resp ? await resp.text().catch(() => resp.statusText) : 'no response';
+      console.error('[Dropbox] load failed:', resp && resp.status, errText);
+      setDbxStatus('error', '取得失敗(' + (resp ? resp.status : '?') + ')');
+      const info = document.getElementById('dbx-info');
+      if (info) info.textContent = `エラー: HTTP ${resp ? resp.status : '?'} - ${errText.slice(0,200)}`;
+      return null;
+    }
+  } catch(e) {
+    console.error('[Dropbox] load error:', e);
+    setDbxStatus('error', 'エラー');
+    return null;
+  }
+}
+
+async function dbxManualSync() {
+  const ok = await dbxSave(false);
+  if (ok) alert('同期しました');
+}
+
+async function dbxManualPull() {
+  const remote = await dbxLoad();
+  if (remote) {
+    if (!confirm('Dropboxから最新を取得してローカルを上書きしますか？')) return;
+    state = remote;
+    saveState();
+    render();
+    alert('最新データを取得しました');
+  } else {
+    alert('Dropboxにデータがありません');
+  }
+}
+
+function scheduleDbxAutoSave() {
+  if (!dbxToken) return;
+  if (dbxAutoSaveTimer) clearTimeout(dbxAutoSaveTimer);
+  dbxAutoSaveTimer = setTimeout(() => { dbxSave(true); dbxAutoSaveTimer = null; }, 2000);
+}
+
+// Hook into saveState
+const _origSaveState = saveState;
+saveState = function() {
+  _origSaveState();
+  scheduleDbxAutoSave();
+};
+
+// ========== Init ==========
+render();
+updateDbxUI();
+(async function init() {
+  dbxAppKey = localStorage.getItem('dbx_app_key');
+  dbxToken = localStorage.getItem('dbx_token');
+  const savedPath = localStorage.getItem('dbx_file_path');
+  if (savedPath) dbxFilePath = savedPath;
+  const handled = await dbxHandleCallback();
+  if (dbxToken) {
+    const remote = await dbxLoad();
+    if (remote) {
+      state = remote;
+      _origSaveState();
+      render();
+    } else {
+      // リモートが空 → ローカルの現在の状態を初回プッシュ
+      await dbxSave(false);
+    }
+    updateDbxUI();
+  }
+})();
+</script>
+</body>
+</html>
