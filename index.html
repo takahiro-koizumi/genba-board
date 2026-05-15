@@ -183,11 +183,9 @@
   .head.site-head { left: 0; z-index: 30; }
   .day-name { font-size: 13px; }
   .day-num { font-size: 22px; }
-  .day-name.sun, .day-num.sun { color: #d33; }
-  .day-name.sat, .day-num.sat { color: #2563eb; }
-  .day-name.green-day, .day-num.green-day { color: #2e7d32; }
-  .head.has-holiday { background: #fffaeb; }
-  .head.has-green { background: #c8e6c9; }
+  .head.col-red { background: #ffcdd2 !important; }
+  .head.col-blue { background: #bbdefb !important; }
+  .head.col-green { background: #c8e6c9 !important; }
   .head { position: sticky; top: 0; }
   .day-copy-btn {
     position: absolute;
@@ -978,9 +976,9 @@
     font-weight: bold;
     text-align: center;
   }
-  .list-table th.sun { color: #d33; }
-  .list-table th.sat { color: #2563eb; }
-  .list-table th.green-day { color: #2e7d32; background: #e8f5e9; }
+  .list-table th.col-red { background: #ffcdd2; }
+  .list-table th.col-blue { background: #bbdefb; }
+  .list-table th.col-green { background: #c8e6c9; }
   .list-table td.name {
     background: #fafaf4;
     position: sticky;
@@ -1466,10 +1464,11 @@ const COMPANY_HOLIDAYS_BLUE = new Set([
 const COMPANY_HOLIDAYS_GREEN = new Set([
   '2026-04-22',
 ]);
-function holidayClass(dateStr) {
-  if (COMPANY_HOLIDAYS_GREEN.has(dateStr)) return 'green-day';
-  if (COMPANY_HOLIDAYS_RED.has(dateStr)) return 'sun';
-  if (COMPANY_HOLIDAYS_BLUE.has(dateStr)) return 'sat';
+function dateBgClass(dateStr) {
+  if (COMPANY_HOLIDAYS_GREEN.has(dateStr)) return 'col-green';
+  const dow = new Date(dateStr).getDay();
+  if (dow === 0 || COMPANY_HOLIDAYS_RED.has(dateStr)) return 'col-red';
+  if (dow === 6 || COMPANY_HOLIDAYS_BLUE.has(dateStr)) return 'col-blue';
   return '';
 }
 
@@ -1798,10 +1797,7 @@ function renderGrid() {
   for (let i = 0; i < 7; i++) {
     const dateStr = addDays(state.weekStart, i);
     const dow = dayOfWeek(dateStr);
-    const baseCls = dow === 0 ? 'sun' : dow === 6 ? 'sat' : '';
-    const holiCls = holidayClass(dateStr);
-    const cls = holiCls || baseCls;
-    const isHoliday = !!holiCls && holiCls !== '';
+    const bgCls = dateBgClass(dateStr);
     let dayTotal = 0;
     state.sites.forEach(s => {
       const c = state.schedule[s.id] && state.schedule[s.id][dateStr];
@@ -1809,9 +1805,9 @@ function renderGrid() {
     });
     const totalHtml = dayTotal > 0 ? `<span class="day-total">計${dayTotal}人</span>` : '';
     const head = document.createElement('div');
-    head.className = 'head' + (holiCls === 'green-day' ? ' has-green' : (isHoliday && dow !== 0 && dow !== 6 ? ' has-holiday' : ''));
+    head.className = 'head' + (bgCls ? ' ' + bgCls : '');
     head.dataset.date = dateStr;
-    head.innerHTML = `<span class="day-name ${cls}">${DAYS_JP[dow]}</span><span class="day-num ${cls}">${new Date(dateStr).getDate()}</span>${totalHtml}<button class="day-copy-btn" title="タップ：複数選択コピー / ドラッグ：別日へコピー">📋</button>`;
+    head.innerHTML = `<span class="day-name">${DAYS_JP[dow]}</span><span class="day-num">${new Date(dateStr).getDate()}</span>${totalHtml}<button class="day-copy-btn" title="タップ：複数選択コピー / ドラッグ：別日へコピー">📋</button>`;
     const btn = head.querySelector('.day-copy-btn');
     const dayLabel = `${DAYS_JP[dow]}曜 ${new Date(dateStr).getMonth()+1}/${new Date(dateStr).getDate()} の配置`;
     makeCopyDraggable(btn, 'day', dateStr, dayLabel, () => openDayCopy(dateStr));
@@ -2913,10 +2909,8 @@ function renderListTable() {
   let html = `<thead><tr><th class="name-col">${headLabel}</th>`;
   days.forEach(d => {
     const dow = dayOfWeek(d);
-    const baseCls = dow === 0 ? 'sun' : dow === 6 ? 'sat' : '';
-    const holiCls = holidayClass(d);
-    const cls = holiCls || baseCls;
-    html += `<th class="${cls}">${DAYS_JP[dow]} ${formatDate(d)}</th>`;
+    const bgCls = dateBgClass(d);
+    html += `<th class="${bgCls}">${DAYS_JP[dow]} ${formatDate(d)}</th>`;
   });
   html += '<th>稼働日数</th></tr></thead><tbody>';
 
