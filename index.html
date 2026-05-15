@@ -1265,6 +1265,22 @@
       </div>
     </div>
 
+    <div class="settings-section">
+      <h3>バックアップ先フォルダ</h3>
+      <p>💾ボタンでバックアップを取ったときの保存先フォルダ。一度選んでおけば、以降は同じフォルダに自動保存されます。<br>
+        推奨：<code>Dropbox \ 大田原工業　工事部 \ ☆施工中 \ ★現場配置ボード</code></p>
+      <div class="settings-row">
+        <label style="font-size:12px; color:#666; min-width:80px;">保存先：</label>
+        <span id="backup-dir-name" style="flex:1; font-size:13px;">未設定</span>
+        <button class="primary" onclick="changeBackupDir()">フォルダを選択 / 変更</button>
+        <button class="danger" onclick="clearBackupDirSetting()">クリア</button>
+      </div>
+      <div class="settings-help">
+        Chrome / Edge で動作します（Safari / Firefox はダウンロードに切替）。<br>
+        フォルダの権限はブラウザ再起動後に再付与が必要なことがあります。
+      </div>
+    </div>
+
     <div class="modal-actions">
       <button onclick="closeSettings()">閉じる</button>
     </div>
@@ -2150,12 +2166,149 @@ function toggleEditMode() {
 }
 
 // ========== Export / Import ==========
-function exportData() {
-  const blob = new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' });
+// ===== Backup folder (File System Access API) =====
+const BACKUP_DIR_KEY = 'backup-dir';
+
+function _idbOpen() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open('genba-board-fs', 1);
+    req.onupgradeneeded = () => req.result.createObjectStore('handles');
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+async function saveBackupDir(handle) {
+  try {
+    const db = await _idbOpen();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction('handles', 'readwrite');
+      tx.objectStore('handles').put(handle, BACKUP_DIR_KEY);
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+  } catch (e) { console.error(e); }
+}
+async function loadBackupDir() {
+  try {
+    const db = await _idbOpen();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction('handles', 'readonly');
+      const req = tx.objectStore('handles').get(BACKUP_DIR_KEY);
+      req.onsuccess = () => resolve(req.result || null);
+      req.onerror = () => reject(req.error);
+    });
+  } catch (e) { return null; }
+}
+async function clearBackupDir() {
+  try {
+    const db = await _idbOpen();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction('handles', 'readwrite');
+      tx.objectStore('handles').delete(BACKUP_DIR_KEY);
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+  } catch (e) { console.error(e); }
+}
+async function ensureBackupDirPermission(handle) {
+  const opts = { mode: 'readwrite' };
+  try {
+    const perm = await handle.queryPermission(opts);
+    if (perm === 'granted') return true;
+    const req = await handle.requestPermission(opts);
+    return req === 'granted';
+  } catch (e) {
+    console.error('permission check failed', e);
+    return false;
+  }
+}
+async function pickBackupDir() {
+  if (!('showDirectoryPicker' in window)) {
+    alert('お使いのブラウザはフォルダ保存に対応していません（Chrome / Edge を推奨）');
+    return null;
+  }
+  try {
+    const handle = await window.showDirectoryPicker({
+      mode: 'readwrite',
+      startIn: 'documents',
+    });
+    await saveBackupDir(handle);
+    return handle;
+  } catch (e) {
+    if (e.name !== 'AbortError') console.error(e);
+    return null;
+  }
+}
+async function changeBackupDir() {
+  const handle = await pickBackupDir();
+  if (handle) {
+    alert(`バックアップ先を「${handle.name}」に設定しました`);
+    updateBackupDirUI();
+  }
+}
+async function clearBackupDirSetting() {
+  if (!confirm('バックアップ先フォルダ設定をクリアします（以降はダウンロードに切り替わります）。よろしいですか？')) return;
+  await clearBackupDir();
+  alert('クリアしました');
+  updateBackupDirUI();
+}
+async function updateBackupDirUI() {
+  const el = document.getElementById('backup-dir-name');
+  if (!el) return;
+  const handle = await loadBackupDir();
+  if (handle) {
+    el.textContent = handle.name + ' /';
+    el.style.color = '#15803d';
+  } else {
+    el.textContent = '未設定（ダウンロードに切り替え）';
+    el.style.color = '#888';
+  }
+}
+
+async function exportData() {
+  const jsonStr = JSON.stringify(state, null, 2);
+  const now = new Date();
+  const yyyy = now.getFullYear();
+  const mm = String(now.getMonth() + 1).padStart(2, '0');
+  const dd = String(now.getDate()).padStart(2, '0');
+  const hh = String(now.getHours()).padStart(2, '0');
+  const mi = String(now.getMinutes()).padStart(2, '0');
+  const filename = `genba-board-${yyyy}-${mm}-${dd}_${hh}${mi}.json`;
+
+  // 1) File System Access API でフォルダに直接保存
+  if ('showDirectoryPicker' in window) {
+    let handle = await loadBackupDir();
+    if (!handle) {
+      if (confirm('バックアップ先フォルダを選んでください。\n（推奨：Dropbox \\ 大田原工業　工事部 \\ ☆施工中 \\ ★現場配置ボード）\n\n選択後は同じフォルダに自動保存されます。')) {
+        handle = await pickBackupDir();
+      }
+    }
+    if (handle) {
+      const ok = await ensureBackupDirPermission(handle);
+      if (ok) {
+        try {
+          const fh = await handle.getFileHandle(filename, { create: true });
+          const w = await fh.createWritable();
+          await w.write(jsonStr);
+          await w.close();
+          alert(`バックアップを保存しました：\n[${handle.name}] / ${filename}`);
+          return;
+        } catch (e) {
+          console.error('保存失敗', e);
+          alert('保存に失敗しました：' + e.message + '\nダウンロードに切り替えます。');
+        }
+      } else {
+        alert('書き込み権限が拒否されました。ダウンロードに切り替えます。');
+      }
+    }
+  }
+
+  // 2) フォールバック：ブラウザのダウンロード
+  const blob = new Blob([jsonStr], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = `genba-board-${new Date().toISOString().slice(0,10)}.json`;
+  a.download = filename;
   a.click();
   URL.revokeObjectURL(url);
 }
@@ -3047,6 +3200,7 @@ function openSettings() {
   document.getElementById('dbx-file-path').value = dbxFilePath;
   document.getElementById('dbx-redirect-display').textContent = window.location.origin + window.location.pathname;
   updateDbxUI();
+  updateBackupDirUI();
   document.getElementById('settings-modal').classList.add('show');
 }
 function closeSettings() {
