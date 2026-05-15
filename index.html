@@ -1042,6 +1042,16 @@
     background: #fff8e1;
     font-weight: bold;
   }
+  .month-table tr.row-rest td {
+    background: #e3f2fd;
+  }
+  .month-table tr.row-rest td.site-name-col {
+    background: #bbdefb;
+    color: #1565c0;
+  }
+  .month-table tr.row-rest td.total-col {
+    background: #90caf9;
+  }
 
   /* ===== Mobile / iPad tweaks ===== */
   @media (max-width: 1024px) {
@@ -1304,6 +1314,11 @@
       <button class="close-btn" onclick="closeListView()">×</button>
     </div>
     <div class="list-controls">
+      <div class="filter-group" id="list-week-nav" style="background:#f0f0e8;">
+        <button data-filter="prev" onclick="listPrevWeek()">◀ 前週</button>
+        <button data-filter="this" onclick="listThisWeek()">今週</button>
+        <button data-filter="next" onclick="listNextWeek()">次週 ▶</button>
+      </div>
       <div class="filter-group" id="list-section-group">
         <button data-section="person" class="active" onclick="setListSection('person')">人員</button>
         <button data-section="equipment" onclick="setListSection('equipment')">重機</button>
@@ -2568,6 +2583,25 @@ function setListSection(section) {
   renderListTable();
 }
 
+function listPrevWeek() {
+  state.weekStart = addDays(state.weekStart, -7);
+  saveState();
+  render();
+  renderListTable();
+}
+function listNextWeek() {
+  state.weekStart = addDays(state.weekStart, 7);
+  saveState();
+  render();
+  renderListTable();
+}
+function listThisWeek() {
+  state.weekStart = mondayOf(new Date()).toISOString().slice(0,10);
+  saveState();
+  render();
+  renderListTable();
+}
+
 function updateListSectionButtons() {
   document.querySelectorAll('#list-section-group button').forEach(b => {
     b.classList.toggle('active', b.dataset.section === listSection);
@@ -2773,7 +2807,9 @@ function renderMonthSummary() {
     const total = (c.ohtahara || 0) + (c.gardenhomes || 0) + (c.other || 0);
     if (total === 0) return; // 稼働がない現場は省略
     const cls = n => 'num' + (n === 0 ? ' zero' : '');
-    html += `<tr>
+    const isRest = /休み|研修/.test(s.name);
+    const rowCls = isRest ? ' class="row-rest"' : '';
+    html += `<tr${rowCls}>
       <td class="site-name-col">${escapeHtml(s.name)}</td>
       <td class="${cls(c.ohtahara||0)}">${c.ohtahara || 0}</td>
       <td class="${cls(c.gardenhomes||0)}">${c.gardenhomes || 0}</td>
