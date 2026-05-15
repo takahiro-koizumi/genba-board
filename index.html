@@ -185,6 +185,9 @@
   .day-num { font-size: 22px; }
   .day-name.sun, .day-num.sun { color: #d33; }
   .day-name.sat, .day-num.sat { color: #2563eb; }
+  .day-name.green-day, .day-num.green-day { color: #2e7d32; }
+  .head.has-holiday { background: #fffaeb; }
+  .head.has-green { background: #c8e6c9; }
   .head { position: sticky; top: 0; }
   .day-copy-btn {
     position: absolute;
@@ -762,7 +765,31 @@
     line-height: 1;
     flex-shrink: 0;
   }
-  body.filter-jp .magnet[data-kind="trainee"] { display: none !important; }
+
+  /* ===== Specified Skilled Worker (特定技能) ===== */
+  .magnet[data-kind="tokutei"] {
+    border-radius: 14px;
+    padding-left: 4px;
+  }
+  .magnet[data-kind="tokutei"]::before {
+    content: '特';
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0,0,0,0.3);
+    color: white;
+    font-size: 9px;
+    font-weight: bold;
+    padding: 0 3px;
+    height: 14px;
+    min-width: 14px;
+    border-radius: 50%;
+    margin-right: 4px;
+    line-height: 1;
+    flex-shrink: 0;
+  }
+  body.filter-jp .magnet[data-kind="trainee"],
+  body.filter-jp .magnet[data-kind="tokutei"] { display: none !important; }
   body.filter-trainee .magnet[data-type="person"]:not([data-kind="trainee"]) { display: none !important; }
   body.filter-vehicle .magnet[data-type="person"],
   body.filter-vehicle .magnet[data-type="equipment"] { display: none !important; }
@@ -953,6 +980,7 @@
   }
   .list-table th.sun { color: #d33; }
   .list-table th.sat { color: #2563eb; }
+  .list-table th.green-day { color: #2e7d32; background: #e8f5e9; }
   .list-table td.name {
     background: #fafaf4;
     position: sticky;
@@ -964,6 +992,17 @@
   .list-table td.empty { color: #ccc; text-align: center; }
   .list-table tr.row-trainee td.name::before {
     content: '実';
+    display: inline-block;
+    background: #2b3a4a;
+    color: white;
+    font-size: 9px;
+    padding: 1px 4px;
+    border-radius: 8px;
+    margin-right: 6px;
+    line-height: 1.2;
+  }
+  .list-table tr.row-tokutei td.name::before {
+    content: '特';
     display: inline-block;
     background: #2b3a4a;
     color: white;
@@ -1240,6 +1279,7 @@
       <div class="kind-toggle">
         <button id="kind-jp" onclick="setLabelKind('jp')">日本人</button>
         <button id="kind-trainee" onclick="setLabelKind('trainee')">実習生</button>
+        <button id="kind-tokutei" onclick="setLabelKind('tokutei')">特定技能</button>
       </div>
     </div>
     <div id="affil-wrap" class="affil-row" style="display:none">
@@ -1402,6 +1442,36 @@
 
 const STORAGE_KEY = 'genba-board-v1';
 const DAYS_JP = ['日','月','火','水','木','金','土'];
+
+// 会社休日カレンダー（2025年11月～2026年10月）
+// red: 日曜と同等の休日（×1.35）、blue: 祝日・会社指定日（×1.25）、green: 健康診断・安全大会
+const COMPANY_HOLIDAYS_RED = new Set([
+  '2025-11-03', '2025-11-24',
+  '2026-01-12',
+  '2026-02-23',
+  '2026-04-29',
+  '2026-07-20',
+  '2026-08-11',
+  '2026-09-21', '2026-09-22', '2026-09-23',
+  '2026-10-12',
+]);
+const COMPANY_HOLIDAYS_BLUE = new Set([
+  '2025-12-29', '2025-12-30', '2025-12-31',
+  '2026-01-01', '2026-01-02',
+  '2026-02-11',
+  '2026-03-20',
+  '2026-05-04', '2026-05-05', '2026-05-06',
+  '2026-08-10', '2026-08-12', '2026-08-13', '2026-08-14',
+]);
+const COMPANY_HOLIDAYS_GREEN = new Set([
+  '2026-04-22',
+]);
+function holidayClass(dateStr) {
+  if (COMPANY_HOLIDAYS_GREEN.has(dateStr)) return 'green-day';
+  if (COMPANY_HOLIDAYS_RED.has(dateStr)) return 'sun';
+  if (COMPANY_HOLIDAYS_BLUE.has(dateStr)) return 'sat';
+  return '';
+}
 
 // 重機一覧 ラベル = "丸数字 容量"（建設機械_統合一覧20260325 より）
 const DEFAULT_EQUIPMENT_FROM_LIST = [
@@ -1728,7 +1798,10 @@ function renderGrid() {
   for (let i = 0; i < 7; i++) {
     const dateStr = addDays(state.weekStart, i);
     const dow = dayOfWeek(dateStr);
-    const cls = dow === 0 ? 'sun' : dow === 6 ? 'sat' : '';
+    const baseCls = dow === 0 ? 'sun' : dow === 6 ? 'sat' : '';
+    const holiCls = holidayClass(dateStr);
+    const cls = holiCls || baseCls;
+    const isHoliday = !!holiCls && holiCls !== '';
     let dayTotal = 0;
     state.sites.forEach(s => {
       const c = state.schedule[s.id] && state.schedule[s.id][dateStr];
@@ -1736,7 +1809,7 @@ function renderGrid() {
     });
     const totalHtml = dayTotal > 0 ? `<span class="day-total">計${dayTotal}人</span>` : '';
     const head = document.createElement('div');
-    head.className = 'head';
+    head.className = 'head' + (holiCls === 'green-day' ? ' has-green' : (isHoliday && dow !== 0 && dow !== 6 ? ' has-holiday' : ''));
     head.dataset.date = dateStr;
     head.innerHTML = `<span class="day-name ${cls}">${DAYS_JP[dow]}</span><span class="day-num ${cls}">${new Date(dateStr).getDate()}</span>${totalHtml}<button class="day-copy-btn" title="タップ：複数選択コピー / ドラッグ：別日へコピー">📋</button>`;
     const btn = head.querySelector('.day-copy-btn');
@@ -1970,8 +2043,10 @@ function renderPool() {
   if (activeTab === 'person') {
     const labels = state.labels.person || [];
     const jp = labels.filter(n => getPersonKind(n) === 'jp');
+    const tk = labels.filter(n => getPersonKind(n) === 'tokutei');
     const tr = labels.filter(n => getPersonKind(n) === 'trainee');
     appendSection('日本人', jp);
+    appendSection('特定技能', tk);
     appendSection('実習生', tr);
   } else {
     const labels = state.labels[activeTab] || [];
@@ -2547,6 +2622,7 @@ function openColorPicker(type, label) {
     const k = getPersonKind(label);
     document.getElementById('kind-jp').classList.toggle('active', k === 'jp');
     document.getElementById('kind-trainee').classList.toggle('active', k === 'trainee');
+    document.getElementById('kind-tokutei').classList.toggle('active', k === 'tokutei');
   } else {
     kindWrap.style.display = 'none';
   }
@@ -2697,6 +2773,7 @@ function setLabelKind(kind) {
   saveState();
   document.getElementById('kind-jp').classList.toggle('active', kind === 'jp');
   document.getElementById('kind-trainee').classList.toggle('active', kind === 'trainee');
+  document.getElementById('kind-tokutei').classList.toggle('active', kind === 'tokutei');
   const preview = document.querySelector('#color-target .preview-magnet');
   if (preview) preview.dataset.kind = kind;
   render();
@@ -2836,7 +2913,9 @@ function renderListTable() {
   let html = `<thead><tr><th class="name-col">${headLabel}</th>`;
   days.forEach(d => {
     const dow = dayOfWeek(d);
-    const cls = dow === 0 ? 'sun' : dow === 6 ? 'sat' : '';
+    const baseCls = dow === 0 ? 'sun' : dow === 6 ? 'sat' : '';
+    const holiCls = holidayClass(d);
+    const cls = holiCls || baseCls;
     html += `<th class="${cls}">${DAYS_JP[dow]} ${formatDate(d)}</th>`;
   });
   html += '<th>稼働日数</th></tr></thead><tbody>';
@@ -2857,7 +2936,8 @@ function renderListTable() {
 
     persons.forEach(name => {
       const kind = getPersonKind(name);
-      html += `<tr class="row-${kind === 'trainee' ? 'trainee' : 'jp'}"><td class="name">${escapeHtml(name)}</td>`;
+      const rowCls = kind === 'trainee' ? 'trainee' : (kind === 'tokutei' ? 'tokutei' : 'jp');
+      html += `<tr class="row-${rowCls}"><td class="name">${escapeHtml(name)}</td>`;
       let workDays = 0;
       days.forEach(date => {
         const sites = [];
