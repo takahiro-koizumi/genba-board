@@ -988,8 +988,43 @@
     color: #1565c0;
     font-weight: bold;
   }
+  .list-table .site-tag.rest-day {
+    background: #ffcdd2;
+    color: #c62828;
+    font-weight: bold;
+  }
   .list-table td.rest-only {
     background: #e3f2fd;
+  }
+  .list-table td.rest-day-only {
+    background: #ffebee;
+  }
+  .list-table .cell-memo {
+    display: block;
+    min-height: 16px;
+    font-size: 11px;
+    color: #555;
+    padding: 2px 4px;
+    margin-top: 3px;
+    border: 1px dashed transparent;
+    border-radius: 3px;
+    outline: none;
+    white-space: pre-wrap;
+    word-break: break-all;
+    line-height: 1.3;
+  }
+  .list-table .cell-memo:hover { border-color: #ccc; }
+  .list-table .cell-memo:focus {
+    border-color: #2563eb;
+    background: #eff6ff;
+  }
+  .list-table .cell-memo:empty::before {
+    content: '＋メモ';
+    color: #ccc;
+    font-size: 10px;
+  }
+  .list-table .cell-memo:focus:empty::before {
+    content: '';
   }
 
   /* ===== Month summary ===== */
@@ -1517,6 +1552,7 @@ function loadState() {
       if (!obj.personKind) obj.personKind = {};
       if (!obj.personAffil) obj.personAffil = {};
       if (!obj.personMemo) obj.personMemo = {};
+      if (!obj.cellMemo) obj.cellMemo = {};
       if (!obj.viewFilter) obj.viewFilter = 'all';
       if (!obj.labels) obj.labels = { person: [], equipment: [], vehicle: [] };
       if (!obj.labels.equipment) obj.labels.equipment = [];
@@ -1614,6 +1650,7 @@ function initialState() {
     personKind: {},
     personAffil: {},
     personMemo: {},
+    cellMemo: {},
     viewFilter: 'all',
   };
 }
@@ -2830,17 +2867,22 @@ function renderListTable() {
             sites.push(site.name);
           }
         });
+        const memoKey = `person|${name}|${date}`;
+        const memo = (state.cellMemo && state.cellMemo[memoKey]) || '';
         if (sites.length > 0) {
           workDays++;
           const conflictCls = sites.length > 1 ? ' conflict' : '';
-          const allRest = sites.every(s => /休み|研修/.test(s));
-          const restCls = allRest ? ' rest-only' : '';
+          const allRestDay = sites.every(s => /休み/.test(s));
+          const allRest = !allRestDay && sites.every(s => /休み|研修/.test(s));
+          const restCls = allRestDay ? ' rest-day-only' : (allRest ? ' rest-only' : '');
           html += `<td class="${conflictCls}${restCls}">${sites.map(s => {
-            const isRest = /休み|研修/.test(s);
-            return `<span class="site-tag${isRest ? ' rest' : ''}">${escapeHtml(s)}</span>`;
-          }).join('')}</td>`;
+            const isRestDay = /休み/.test(s);
+            const isRest = !isRestDay && /研修/.test(s);
+            const cls = isRestDay ? ' rest-day' : (isRest ? ' rest' : '');
+            return `<span class="site-tag${cls}">${escapeHtml(s)}</span>`;
+          }).join('')}<div class="cell-memo" contenteditable="true" data-memokey="${escapeAttr(memoKey)}">${escapeHtml(memo)}</div></td>`;
         } else {
-          html += '<td class="empty">—</td>';
+          html += `<td>${memo ? '' : '<span class="empty-mark" style="color:#ccc;">—</span>'}<div class="cell-memo" contenteditable="true" data-memokey="${escapeAttr(memoKey)}">${escapeHtml(memo)}</div></td>`;
         }
       });
       html += `<td style="text-align:center;font-weight:bold;">${workDays}</td></tr>`;
@@ -2887,6 +2929,18 @@ function renderListTable() {
   html += '</tbody>';
   tbl.innerHTML = html;
 }
+
+// Cell memo save (event delegation on list-table)
+document.getElementById('list-table').addEventListener('blur', (e) => {
+  if (!e.target.classList || !e.target.classList.contains('cell-memo')) return;
+  const key = e.target.dataset.memokey;
+  if (!key) return;
+  const val = e.target.textContent.trim();
+  if (!state.cellMemo) state.cellMemo = {};
+  if (val) state.cellMemo[key] = val;
+  else delete state.cellMemo[key];
+  saveState();
+}, true);
 
 // ========== Month summary ==========
 function openMonthSummary() {
