@@ -983,6 +983,14 @@
     font-size: 11px;
     white-space: nowrap;
   }
+  .list-table .site-tag.rest {
+    background: #bbdefb;
+    color: #1565c0;
+    font-weight: bold;
+  }
+  .list-table td.rest-only {
+    background: #e3f2fd;
+  }
 
   /* ===== Month summary ===== */
   .month-nav {
@@ -2825,7 +2833,12 @@ function renderListTable() {
         if (sites.length > 0) {
           workDays++;
           const conflictCls = sites.length > 1 ? ' conflict' : '';
-          html += `<td class="${conflictCls}">${sites.map(s => `<span class="site-tag">${escapeHtml(s)}</span>`).join('')}</td>`;
+          const allRest = sites.every(s => /休み|研修/.test(s));
+          const restCls = allRest ? ' rest-only' : '';
+          html += `<td class="${conflictCls}${restCls}">${sites.map(s => {
+            const isRest = /休み|研修/.test(s);
+            return `<span class="site-tag${isRest ? ' rest' : ''}">${escapeHtml(s)}</span>`;
+          }).join('')}</td>`;
         } else {
           html += '<td class="empty">—</td>';
         }
