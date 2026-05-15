@@ -3567,6 +3567,7 @@ async function dbxSave(silent) {
       setDbxStatus('connected', '同期 ' + dbxLastSync);
       const info = document.getElementById('dbx-info');
       if (info) info.textContent = '最終同期: ' + dbxLastSync + (result && result.path_display ? ` (${result.path_display})` : '');
+      _dbxPending = false;
       return true;
     } else {
       const errText = resp ? await resp.text().catch(() => resp.statusText) : 'no response';
@@ -3638,8 +3639,14 @@ async function dbxManualPull() {
   }
 }
 
+// 保存状態フラグ（閉じる時の警告とローカル定期保存に使用）
+let _dbxPending = false;
+let _localPending = false;
+
 function scheduleDbxAutoSave() {
+  _localPending = true;
   if (!dbxToken) return;
+  _dbxPending = true;
   if (dbxAutoSaveTimer) clearTimeout(dbxAutoSaveTimer);
   dbxAutoSaveTimer = setTimeout(() => { dbxSave(true); dbxAutoSaveTimer = null; }, 2000);
 }
@@ -3650,6 +3657,51 @@ saveState = function() {
   _origSaveState();
   scheduleDbxAutoSave();
 };
+
+// ========== Auto-backup to local folder (periodic) ==========
+const AUTO_BACKUP_INTERVAL_MS = 5 * 60 * 1000; // 5 min
+
+async function autoBackupToFolder() {
+  if (!_localPending) return;
+  if (!('showDirectoryPicker' in window)) return;
+  const dir = await loadBackupDir();
+  if (!dir) return;
+  try {
+    const perm = await dir.queryPermission({ mode: 'readwrite' });
+    if (perm !== 'granted') return; // 権限が無い時は静かに諦める（リクエストでダイアログ出さない）
+    const fh = await dir.getFileHandle('genba-board-autosave.json', { create: true });
+    const w = await fh.createWritable();
+    await w.write(JSON.stringify(state, null, 2));
+    await w.close();
+    _localPending = false;
+    console.log('[AutoBackup] saved at', new Date().toLocaleTimeString('ja-JP'));
+  } catch (e) {
+    console.warn('[AutoBackup] failed:', e);
+  }
+}
+setInterval(autoBackupToFolder, AUTO_BACKUP_INTERVAL_MS);
+
+// 閉じる時の警告（Dropbox同期未完了の場合）
+window.addEventListener('beforeunload', (e) => {
+  if (_dbxPending) {
+    e.preventDefault();
+    e.returnValue = 'まだクラウドに保存していない変更があります。閉じてもよろしいですか？';
+    return e.returnValue;
+  }
+});
+
+// ページが裏に行った時にも定期保存をトリガ（モバイルなど）
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'hidden') {
+    // 即座にDropbox保存
+    if (dbxToken && _dbxPending) {
+      if (dbxAutoSaveTimer) { clearTimeout(dbxAutoSaveTimer); dbxAutoSaveTimer = null; }
+      dbxSave(true);
+    }
+    // ローカルバックアップも試す
+    autoBackupToFolder();
+  }
+});
 
 // ========== Init ==========
 render();
