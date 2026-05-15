@@ -183,8 +183,9 @@
   .head.site-head { left: 0; z-index: 30; }
   .day-name { font-size: 13px; }
   .day-num { font-size: 22px; }
-  .head.col-red { background: #ffcdd2 !important; }
-  .head.col-blue { background: #bbdefb !important; }
+  .head.col-red-red { background: #ffcdd2 !important; color: #d33; }
+  .head.col-blue-red { background: #bbdefb !important; color: #d33; }
+  .head.col-blue-black { background: #bbdefb !important; }
   .head.col-green { background: #c8e6c9 !important; }
   .head { position: sticky; top: 0; }
   .day-copy-btn {
@@ -976,8 +977,9 @@
     font-weight: bold;
     text-align: center;
   }
-  .list-table th.col-red { background: #ffcdd2; }
-  .list-table th.col-blue { background: #bbdefb; }
+  .list-table th.col-red-red { background: #ffcdd2; color: #d33; }
+  .list-table th.col-blue-red { background: #bbdefb; color: #d33; }
+  .list-table th.col-blue-black { background: #bbdefb; }
   .list-table th.col-green { background: #c8e6c9; }
   .list-table td.name {
     background: #fafaf4;
@@ -1442,33 +1444,42 @@ const STORAGE_KEY = 'genba-board-v1';
 const DAYS_JP = ['日','月','火','水','木','金','土'];
 
 // 会社休日カレンダー（2025年11月～2026年10月）
-// red: 日曜と同等の休日（×1.35）、blue: 祝日・会社指定日（×1.25）、green: 健康診断・安全大会
-const COMPANY_HOLIDAYS_RED = new Set([
-  '2025-11-03', '2025-11-24',
-  '2026-01-12',
-  '2026-02-23',
-  '2026-04-29',
-  '2026-07-20',
-  '2026-08-11',
-  '2026-09-21', '2026-09-22', '2026-09-23',
-  '2026-10-12',
+// 日曜 → 赤マス＋赤字、国民の祝日 → 青マス＋赤字、会社指定（土・年末年始・お盆など）→ 青マス＋黒字、健康診断・安全大会 → 緑
+const NATIONAL_HOLIDAYS = new Set([
+  '2025-11-03',  // 文化の日
+  '2025-11-24',  // 勤労感謝の日 振替
+  '2026-01-01',  // 元日
+  '2026-01-12',  // 成人の日
+  '2026-02-11',  // 建国記念日
+  '2026-02-23',  // 天皇誕生日
+  '2026-03-20',  // 春分の日
+  '2026-04-29',  // 昭和の日
+  '2026-05-04',  // みどりの日
+  '2026-05-05',  // こどもの日
+  '2026-05-06',  // 振替休日
+  '2026-07-20',  // 海の日
+  '2026-08-11',  // 山の日
+  '2026-09-21',  // 敬老の日
+  '2026-09-22',  // 国民の休日
+  '2026-09-23',  // 秋分の日
+  '2026-10-12',  // スポーツの日
 ]);
 const COMPANY_HOLIDAYS_BLUE = new Set([
+  // 年末年始
   '2025-12-29', '2025-12-30', '2025-12-31',
-  '2026-01-01', '2026-01-02',
-  '2026-02-11',
-  '2026-03-20',
-  '2026-05-04', '2026-05-05', '2026-05-06',
+  '2026-01-02',
+  // お盆
   '2026-08-10', '2026-08-12', '2026-08-13', '2026-08-14',
 ]);
 const COMPANY_HOLIDAYS_GREEN = new Set([
-  '2026-04-22',
+  '2026-04-22',  // 健康診断・安全大会
 ]);
 function dateBgClass(dateStr) {
   if (COMPANY_HOLIDAYS_GREEN.has(dateStr)) return 'col-green';
   const dow = new Date(dateStr).getDay();
-  if (dow === 0 || COMPANY_HOLIDAYS_RED.has(dateStr)) return 'col-red';
-  if (dow === 6 || COMPANY_HOLIDAYS_BLUE.has(dateStr)) return 'col-blue';
+  if (dow === 0) return 'col-red-red';
+  if (NATIONAL_HOLIDAYS.has(dateStr)) return 'col-blue-red';
+  if (dow === 6 || COMPANY_HOLIDAYS_BLUE.has(dateStr)) return 'col-blue-black';
   return '';
 }
 
