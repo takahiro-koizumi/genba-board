@@ -984,6 +984,65 @@
     white-space: nowrap;
   }
 
+  /* ===== Month summary ===== */
+  .month-nav {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 0;
+  }
+  .month-nav button {
+    padding: 6px 12px;
+    border: 1px solid #ccc;
+    background: white;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 13px;
+  }
+  .month-nav .month-label {
+    font-weight: bold;
+    font-size: 15px;
+    margin: 0 8px;
+  }
+  .month-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+  }
+  .month-table th, .month-table td {
+    border: 1px solid #e2e0d2;
+    padding: 6px 10px;
+    text-align: center;
+  }
+  .month-table th {
+    background: #f8f8f4;
+    font-weight: bold;
+    position: sticky;
+    top: 0;
+    z-index: 2;
+  }
+  .month-table th.affil-ohtahara { color: #2b3a4a; }
+  .month-table th.affil-gardenhomes { color: #15803d; }
+  .month-table th.affil-other { color: #92400e; }
+  .month-table td.site-name-col {
+    text-align: left;
+    background: #fafaf4;
+    font-weight: bold;
+    position: sticky;
+    left: 0;
+    min-width: 180px;
+  }
+  .month-table td.num { font-variant-numeric: tabular-nums; }
+  .month-table td.num.zero { color: #ccc; }
+  .month-table tr.total-row td {
+    background: #f0efe5;
+    font-weight: bold;
+  }
+  .month-table td.total-col {
+    background: #fff8e1;
+    font-weight: bold;
+  }
+
   /* ===== Mobile / iPad tweaks ===== */
   @media (max-width: 1024px) {
     .grid { grid-template-columns: 150px repeat(7, minmax(110px, 1fr)) 110px; min-width: 1080px; }
@@ -1072,6 +1131,7 @@
       <button data-filter="vehicle" onclick="setViewFilter('vehicle')">車両</button>
     </div>
     <button onclick="openListView()">📋 一覧</button>
+    <button onclick="openMonthSummary()">📊 月別</button>
     <div class="spacer"></div>
     <button id="edit-btn" class="primary" onclick="toggleEditMode()">編集モード</button>
     <button onclick="addSite()">＋現場</button>
@@ -1213,6 +1273,26 @@
     <div class="modal-actions">
       <button onclick="closeDayCopy()">キャンセル</button>
       <button class="primary" onclick="executeDayCopy()">コピー実行</button>
+    </div>
+  </div>
+</div>
+
+<div id="month-summary-modal" class="modal-bg">
+  <div class="modal modal-large">
+    <div class="modal-header">
+      <h2>月別集計 <span id="month-label" style="font-weight:normal; color:#666; margin-left:8px;"></span></h2>
+      <button class="close-btn" onclick="closeMonthSummary()">×</button>
+    </div>
+    <div class="month-nav">
+      <button onclick="prevMonth()">◀ 前月</button>
+      <button onclick="thisMonth()">今月</button>
+      <button onclick="nextMonth()">次月 ▶</button>
+      <span class="month-label" id="month-current-label"></span>
+      <span style="flex:1"></span>
+      <span style="font-size:11px; color:#666;">単位：人日（のべ人数）</span>
+    </div>
+    <div class="list-table-wrap">
+      <table id="month-table" class="month-table"></table>
     </div>
   </div>
 </div>
@@ -1385,6 +1465,8 @@ let activeTab = 'person';
 let editMode = false;
 let modalResolver = null;
 let listSection = 'person';
+let monthSummaryYear = null;
+let monthSummaryMonth = null;
 
 // ========== State ==========
 function loadState() {
@@ -2605,6 +2687,120 @@ function renderListTable() {
   html += '</tbody>';
   tbl.innerHTML = html;
 }
+
+// ========== Month summary ==========
+function openMonthSummary() {
+  if (monthSummaryYear === null) {
+    const base = new Date(state.weekStart);
+    monthSummaryYear = base.getFullYear();
+    monthSummaryMonth = base.getMonth() + 1;
+  }
+  document.getElementById('month-summary-modal').classList.add('show');
+  renderMonthSummary();
+}
+
+function closeMonthSummary() {
+  document.getElementById('month-summary-modal').classList.remove('show');
+}
+
+function prevMonth() {
+  monthSummaryMonth--;
+  if (monthSummaryMonth < 1) { monthSummaryMonth = 12; monthSummaryYear--; }
+  renderMonthSummary();
+}
+
+function nextMonth() {
+  monthSummaryMonth++;
+  if (monthSummaryMonth > 12) { monthSummaryMonth = 1; monthSummaryYear++; }
+  renderMonthSummary();
+}
+
+function thisMonth() {
+  const now = new Date();
+  monthSummaryYear = now.getFullYear();
+  monthSummaryMonth = now.getMonth() + 1;
+  renderMonthSummary();
+}
+
+function renderMonthSummary() {
+  const year = monthSummaryYear;
+  const month = monthSummaryMonth;
+  const label = `${year}年 ${month}月`;
+  document.getElementById('month-label').textContent = label;
+  document.getElementById('month-current-label').textContent = label;
+
+  const daysInMonth = new Date(year, month, 0).getDate();
+  const monthPrefix = `${year}-${String(month).padStart(2,'0')}-`;
+
+  // Build per-site, per-affiliation counts
+  const summary = {};
+  state.sites.forEach(s => {
+    summary[s.id] = { ohtahara: 0, gardenhomes: 0, other: 0 };
+  });
+
+  for (let d = 1; d <= daysInMonth; d++) {
+    const dateStr = monthPrefix + String(d).padStart(2, '0');
+    state.sites.forEach(s => {
+      const cell = state.schedule[s.id] && state.schedule[s.id][dateStr];
+      if (!cell || !cell.magnets) return;
+      cell.magnets.forEach(m => {
+        if (m.type !== 'person') return;
+        const affil = getPersonAffil(m.label);
+        if (!summary[s.id][affil]) summary[s.id][affil] = 0;
+        summary[s.id][affil]++;
+      });
+    });
+  }
+
+  const totals = { ohtahara: 0, gardenhomes: 0, other: 0 };
+  state.sites.forEach(s => {
+    totals.ohtahara += summary[s.id].ohtahara || 0;
+    totals.gardenhomes += summary[s.id].gardenhomes || 0;
+    totals.other += summary[s.id].other || 0;
+  });
+  const grandTotal = totals.ohtahara + totals.gardenhomes + totals.other;
+
+  let html = `<thead><tr>
+    <th class="site-name-col" style="text-align:left;">現場</th>
+    <th class="affil-ohtahara">大田原工業</th>
+    <th class="affil-gardenhomes">ガーデンホームズ</th>
+    <th class="affil-other">その他</th>
+    <th>合計</th>
+  </tr></thead><tbody>`;
+
+  state.sites.forEach(s => {
+    const c = summary[s.id];
+    const total = (c.ohtahara || 0) + (c.gardenhomes || 0) + (c.other || 0);
+    if (total === 0) return; // 稼働がない現場は省略
+    const cls = n => 'num' + (n === 0 ? ' zero' : '');
+    html += `<tr>
+      <td class="site-name-col">${escapeHtml(s.name)}</td>
+      <td class="${cls(c.ohtahara||0)}">${c.ohtahara || 0}</td>
+      <td class="${cls(c.gardenhomes||0)}">${c.gardenhomes || 0}</td>
+      <td class="${cls(c.other||0)}">${c.other || 0}</td>
+      <td class="num total-col">${total}</td>
+    </tr>`;
+  });
+
+  if (grandTotal === 0) {
+    html += `<tr><td colspan="5" style="text-align:center;color:#999;padding:20px;">この月の人員配置はありません</td></tr>`;
+  } else {
+    html += `<tr class="total-row">
+      <td class="site-name-col">合計</td>
+      <td class="num">${totals.ohtahara}</td>
+      <td class="num">${totals.gardenhomes}</td>
+      <td class="num">${totals.other}</td>
+      <td class="num total-col">${grandTotal}</td>
+    </tr>`;
+  }
+
+  html += '</tbody>';
+  document.getElementById('month-table').innerHTML = html;
+}
+
+document.getElementById('month-summary-modal').addEventListener('click', (e) => {
+  if (e.target.id === 'month-summary-modal') closeMonthSummary();
+});
 
 // ========== Drag-to-copy (day/site/cell) ==========
 const COPY_DRAG_CONFIG = {
