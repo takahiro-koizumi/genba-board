@@ -3536,13 +3536,16 @@ function asciiEscapeJSON(obj) {
 
 async function dbxApiCall(url, args, body) {
   if (!dbxToken) return null;
+  // 注意: download(body無し)の時は Content-Type を送らない。
+  // Dropbox は application/x-www-form-urlencoded を拒否する（iPad Safari/Edge が厳格に弾く）。
+  const headers = {
+    'Authorization': 'Bearer ' + dbxToken,
+    'Dropbox-API-Arg': asciiEscapeJSON(args),
+  };
+  if (body) headers['Content-Type'] = 'application/octet-stream';
   const doFetch = () => fetch(url, {
     method: 'POST',
-    headers: {
-      'Authorization': 'Bearer ' + dbxToken,
-      'Content-Type': body ? 'application/octet-stream' : 'application/x-www-form-urlencoded',
-      'Dropbox-API-Arg': asciiEscapeJSON(args),
-    },
+    headers: headers,
     body: body || undefined,
   });
   let resp = await doFetch();
