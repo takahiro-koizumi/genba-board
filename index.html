@@ -3346,6 +3346,7 @@ let dbxToken = null;
 let dbxAppKey = null;
 let dbxAutoSaveTimer = null;
 let dbxLastSync = null;
+let _lastDbxRev = null; // 他端末からの更新検知用（最後に読み書きしたrev）
 
 function openSettings() {
   const key = localStorage.getItem('dbx_app_key') || '';
@@ -3564,6 +3565,7 @@ async function dbxSave(silent) {
     if (resp && resp.ok) {
       const result = await resp.json().catch(() => null);
       console.log('[Dropbox] saved to', result && result.path_display);
+      if (result && result.rev) _lastDbxRev = result.rev;
       dbxLastSync = new Date().toLocaleTimeString('ja-JP');
       setDbxStatus('connected', '同期 ' + dbxLastSync);
       const info = document.getElementById('dbx-info');
@@ -3598,6 +3600,10 @@ async function dbxLoad() {
     );
     if (resp && resp.ok) {
       const json = await resp.json();
+      const apiResult = resp.headers.get('Dropbox-API-Result');
+      if (apiResult) {
+        try { const m = JSON.parse(apiResult); if (m.rev) _lastDbxRev = m.rev; } catch(e) {}
+      }
       dbxLastSync = new Date().toLocaleTimeString('ja-JP');
       setDbxStatus('connected', '同期 ' + dbxLastSync);
       console.log('[Dropbox] loaded board.json');
@@ -3625,6 +3631,48 @@ async function dbxLoad() {
 async function dbxManualSync() {
   const ok = await dbxSave(false);
   if (ok) alert('同期しました');
+}
+
+// 他端末からの更新を検知するために rev だけ軽量に問い合わせる
+async function dbxCheckRemoteRev() {
+  if (!dbxToken) return null;
+  try {
+    const doFetch = () => fetch('https://api.dropboxapi.com/2/files/get_metadata', {
+      method: 'POST',
+      headers: {
+        'Authorization': 'Bearer ' + dbxToken,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ path: dbxFilePath })
+    });
+    let resp = await doFetch();
+    if (resp.status === 401) {
+      const ok = await dbxRefreshToken();
+      if (ok) resp = await doFetch();
+    }
+    if (!resp.ok) return null;
+    const meta = await resp.json();
+    return meta.rev || null;
+  } catch(e) {
+    return null;
+  }
+}
+
+// 他端末（iPad等）で更新があったら自動で取り込んで画面に反映
+async function dbxAutoPullIfChanged() {
+  if (!dbxToken) return;
+  if (_dbxPending) return; // 未送信のローカル変更がある時は上書きしない
+  if (document.visibilityState !== 'visible') return;
+  const remoteRev = await dbxCheckRemoteRev();
+  if (!remoteRev || remoteRev === _lastDbxRev) return;
+  console.log('[Dropbox] 他端末からの更新を検知 (rev:', remoteRev, ') - 取り込み中');
+  const remote = await dbxLoad();
+  if (remote) {
+    state = remote;
+    _origSaveState();
+    render();
+    console.log('[Dropbox] 他端末の変更を画面に反映しました');
+  }
 }
 
 async function dbxManualPull() {
@@ -3701,8 +3749,18 @@ document.addEventListener('visibilitychange', () => {
     }
     // ローカルバックアップも試す
     autoBackupToFolder();
+  } else if (document.visibilityState === 'visible') {
+    // 表に戻った時：他端末で更新されてないか即チェック
+    dbxAutoPullIfChanged();
   }
 });
+
+// ウィンドウフォーカス時にも他端末更新をチェック（モニター切替など）
+window.addEventListener('focus', () => { dbxAutoPullIfChanged(); });
+
+// 30秒ごとに他端末の更新を確認（軽量メタデータのみ。変化があれば取得）
+const DBX_POLL_INTERVAL_MS = 30 * 1000;
+setInterval(dbxAutoPullIfChanged, DBX_POLL_INTERVAL_MS);
 
 // ========== Init ==========
 render();
