@@ -790,6 +790,7 @@
   body.filter-jp .magnet[data-kind="trainee"],
   body.filter-jp .magnet[data-kind="tokutei"] { display: none !important; }
   body.filter-trainee .magnet[data-type="person"]:not([data-kind="trainee"]) { display: none !important; }
+  body.filter-tokutei .magnet[data-type="person"]:not([data-kind="tokutei"]) { display: none !important; }
   body.filter-vehicle .magnet[data-type="person"],
   body.filter-vehicle .magnet[data-type="equipment"] { display: none !important; }
   body.filter-vehicle .cell-headcount,
@@ -1220,6 +1221,7 @@
       <button data-filter="all" class="active" onclick="setViewFilter('all')">全体</button>
       <button data-filter="jp" onclick="setViewFilter('jp')">日本人</button>
       <button data-filter="trainee" onclick="setViewFilter('trainee')">実習生</button>
+      <button data-filter="tokutei" onclick="setViewFilter('tokutei')">特定技能</button>
       <button data-filter="vehicle" onclick="setViewFilter('vehicle')">車両</button>
     </div>
     <button onclick="openListView()">📋 一覧</button>
@@ -1427,6 +1429,7 @@
         <button data-filter="all" onclick="setViewFilter('all', true)">全体</button>
         <button data-filter="jp" onclick="setViewFilter('jp', true)">日本人</button>
         <button data-filter="trainee" onclick="setViewFilter('trainee', true)">実習生</button>
+        <button data-filter="tokutei" onclick="setViewFilter('tokutei', true)">特定技能</button>
       </div>
       <input type="search" id="list-search" placeholder="名前で検索..." oninput="renderListTable()" />
       <button onclick="renderListTable()">更新</button>
@@ -1777,6 +1780,7 @@ function render() {
 function applyFilterClass() {
   document.body.classList.toggle('filter-jp', state.viewFilter === 'jp');
   document.body.classList.toggle('filter-trainee', state.viewFilter === 'trainee');
+  document.body.classList.toggle('filter-tokutei', state.viewFilter === 'tokutei');
   document.body.classList.toggle('filter-vehicle', state.viewFilter === 'vehicle');
 }
 
@@ -2933,6 +2937,7 @@ function renderListTable() {
       const k = getPersonKind(name);
       if (filter === 'jp' && k !== 'jp') return false;
       if (filter === 'trainee' && k !== 'trainee') return false;
+      if (filter === 'tokutei' && k !== 'tokutei') return false;
       return true;
     });
 
