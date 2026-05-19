@@ -1314,22 +1314,12 @@
     </div>
 
     <div class="settings-section">
-      <h3>Dropbox連携</h3>
-      <p>クラウドのDropboxに自動保存し、PC・iPadなど複数端末から同じデータを編集できます。</p>
+      <h3>Dropbox連携（全社員で共有）</h3>
+      <p>大田原工業 工事部のチーム共有フォルダに自動保存します。<br>
+        社員それぞれが「Dropboxに接続」を一度押すだけで、全員が同じデータを編集できます。</p>
 
       <div class="settings-row">
-        <label style="font-size:12px; color:#666; min-width:80px;">App Key：</label>
-        <input type="text" id="dbx-app-key" placeholder="Dropboxアプリの App Key を貼り付け" />
-        <button onclick="saveDbxAppKey()">保存</button>
-      </div>
-      <div class="settings-row">
-        <label style="font-size:12px; color:#666; min-width:80px;">保存パス：</label>
-        <input type="text" id="dbx-file-path" placeholder="/board.json" />
-        <button onclick="saveDbxFilePath()">保存</button>
-      </div>
-
-      <div class="settings-row">
-        <button id="dbx-connect-btn" class="primary" onclick="dbxConnect()">Dropboxに接続</button>
+        <button id="dbx-connect-btn" class="primary" onclick="dbxConnect()" style="font-size:15px; padding:8px 16px;">Dropboxに接続</button>
         <button id="dbx-disconnect-btn" class="danger" onclick="dbxDisconnect()" style="display:none">切断</button>
         <button id="dbx-sync-btn" onclick="dbxManualSync()" style="display:none">今すぐ同期</button>
         <button id="dbx-pull-btn" onclick="dbxManualPull()" style="display:none">↓最新取得</button>
@@ -1337,17 +1327,18 @@
 
       <div id="dbx-info" class="last-sync"></div>
 
-      <div class="settings-help">
-        <b>初回設定（5分）：</b>
-        <ol>
-          <li><a href="https://www.dropbox.com/developers/apps/create" target="_blank">Dropbox 開発者ページ</a>を開く</li>
-          <li>「Scoped access」→「App folder」を選択、名前を入力（例：現場配置ボード）→ Create app</li>
-          <li>「Settings」タブで「Redirect URIs」に <code id="dbx-redirect-display"></code> を追加</li>
-          <li>「Permissions」タブで <code>files.content.write</code>, <code>files.content.read</code>, <code>files.metadata.read</code> をチェック → Submit</li>
-          <li>「Settings」タブの「App key」をコピーして上に貼り付け → 保存 → 「Dropboxに接続」</li>
-        </ol>
-        <b>iPadから使うとき：</b>同じ App Key を入力すれば iPad の Safari でも Dropbox 認証して同じデータを編集できます。
-      </div>
+      <details style="margin-top:12px;">
+        <summary style="cursor:pointer; font-size:12px; color:#666;">▶ 詳細設定（通常さわらない）</summary>
+        <div class="settings-row" style="margin-top:8px;">
+          <label style="font-size:12px; color:#666; min-width:80px;">保存パス：</label>
+          <input type="text" id="dbx-file-path" />
+          <button onclick="saveDbxFilePath()">保存</button>
+        </div>
+        <div class="settings-help" style="font-size:11px; color:#999; margin-top:6px;">
+          既定: <code>/大田原工業　工事部/☆施工中/★現場配置ボード/board.json</code><br>
+          リダイレクトURI: <code id="dbx-redirect-display"></code>
+        </div>
+      </details>
     </div>
 
     <div class="settings-section">
@@ -3346,16 +3337,17 @@ document.getElementById('day-copy-modal').addEventListener('click', (e) => {
 });
 
 // ========== Settings & Dropbox ==========
-let dbxFilePath = '/board.json';
+// 大田原工業 工事部 全社員で共有するための固定値
+// Full Dropbox 型のアプリで、チーム共有フォルダに直接書き込む
+const DBX_APP_KEY = 'w0akss3w157oa53';
+const DBX_DEFAULT_FILE_PATH = '/大田原工業　工事部/☆施工中/★現場配置ボード/board.json';
+let dbxFilePath = DBX_DEFAULT_FILE_PATH;
 let dbxToken = null;
-let dbxAppKey = null;
 let dbxAutoSaveTimer = null;
 let dbxLastSync = null;
 let _lastDbxRev = null; // 他端末からの更新検知用（最後に読み書きしたrev）
 
 function openSettings() {
-  const key = localStorage.getItem('dbx_app_key') || '';
-  document.getElementById('dbx-app-key').value = key;
   document.getElementById('dbx-file-path').value = dbxFilePath;
   document.getElementById('dbx-redirect-display').textContent = window.location.origin + window.location.pathname;
   updateDbxUI();
@@ -3368,15 +3360,6 @@ function closeSettings() {
 document.getElementById('settings-modal').addEventListener('click', (e) => {
   if (e.target.id === 'settings-modal') closeSettings();
 });
-
-function saveDbxAppKey() {
-  const key = document.getElementById('dbx-app-key').value.trim();
-  if (!key) { alert('App Keyを入力してください'); return; }
-  localStorage.setItem('dbx_app_key', key);
-  dbxAppKey = key;
-  alert('App Key を保存しました');
-  updateDbxUI();
-}
 
 function saveDbxFilePath() {
   let path = document.getElementById('dbx-file-path').value.trim();
@@ -3447,14 +3430,12 @@ async function dbxSha256B64Url(s) {
 }
 
 async function dbxConnect() {
-  const appKey = localStorage.getItem('dbx_app_key');
-  if (!appKey) { alert('まず App Key を保存してください'); return; }
   const verifier = dbxRandom(64);
   const challenge = await dbxSha256B64Url(verifier);
   localStorage.setItem('dbx_verifier', verifier);
   const redirect = window.location.origin + window.location.pathname;
   const url = 'https://www.dropbox.com/oauth2/authorize?' + new URLSearchParams({
-    client_id: appKey,
+    client_id: DBX_APP_KEY,
     response_type: 'code',
     redirect_uri: redirect,
     code_challenge: challenge,
@@ -3469,8 +3450,7 @@ async function dbxHandleCallback() {
   const code = params.get('code');
   if (!code) return false;
   const verifier = localStorage.getItem('dbx_verifier');
-  const appKey = localStorage.getItem('dbx_app_key');
-  if (!verifier || !appKey) {
+  if (!verifier) {
     history.replaceState({}, '', window.location.pathname);
     return false;
   }
@@ -3482,7 +3462,7 @@ async function dbxHandleCallback() {
       body: new URLSearchParams({
         code,
         grant_type: 'authorization_code',
-        client_id: appKey,
+        client_id: DBX_APP_KEY,
         code_verifier: verifier,
         redirect_uri: redirect,
       }).toString(),
@@ -3505,15 +3485,14 @@ async function dbxHandleCallback() {
 
 async function dbxRefreshToken() {
   const refresh = localStorage.getItem('dbx_refresh');
-  const appKey = localStorage.getItem('dbx_app_key');
-  if (!refresh || !appKey) return false;
+  if (!refresh) return false;
   const resp = await fetch('https://api.dropboxapi.com/oauth2/token', {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: new URLSearchParams({
       grant_type: 'refresh_token',
       refresh_token: refresh,
-      client_id: appKey,
+      client_id: DBX_APP_KEY,
     }).toString(),
   });
   const data = await resp.json();
@@ -3775,10 +3754,25 @@ setInterval(dbxAutoPullIfChanged, DBX_POLL_INTERVAL_MS);
 render();
 updateDbxUI();
 (async function init() {
-  dbxAppKey = localStorage.getItem('dbx_app_key');
-  dbxToken = localStorage.getItem('dbx_token');
+  // 旧App Keyからのアップグレード: App Keyが変わったら古いtokenは無効なのでクリア
+  const previousAppKey = localStorage.getItem('dbx_app_key');
+  if (previousAppKey && previousAppKey !== DBX_APP_KEY) {
+    localStorage.removeItem('dbx_token');
+    localStorage.removeItem('dbx_refresh');
+    console.log('[Dropbox] App Key changed → cleared old tokens, please re-connect');
+  }
+  localStorage.setItem('dbx_app_key', DBX_APP_KEY);
+
+  // 旧既定パス /board.json からの自動アップグレード
   const savedPath = localStorage.getItem('dbx_file_path');
-  if (savedPath) dbxFilePath = savedPath;
+  if (!savedPath || savedPath === '/board.json' || savedPath === '/board') {
+    dbxFilePath = DBX_DEFAULT_FILE_PATH;
+    localStorage.setItem('dbx_file_path', DBX_DEFAULT_FILE_PATH);
+  } else {
+    dbxFilePath = savedPath;
+  }
+
+  dbxToken = localStorage.getItem('dbx_token');
   const handled = await dbxHandleCallback();
   if (dbxToken) {
     const remote = await dbxLoad();
