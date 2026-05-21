@@ -3368,7 +3368,7 @@ function saveDbxFilePath() {
   if (!path.toLowerCase().endsWith('.json')) {
     if (!confirm(`「${path}」は .json で終わっていません。保存しますか？`)) return;
   }
-  localStorage.setItem('dbx_file_path', path);
+  localStorage.setItem('genba_dbx_file_path', path);
   dbxFilePath = path;
   document.getElementById('dbx-file-path').value = path;
   alert('保存パスを更新しました: ' + path + '\n「↓最新取得」か「今すぐ同期」で動作確認してください。');
@@ -3764,10 +3764,12 @@ updateDbxUI();
   localStorage.setItem('dbx_app_key', DBX_APP_KEY);
 
   // 旧既定パス /board.json からの自動アップグレード
-  const savedPath = localStorage.getItem('dbx_file_path');
+  // localStorageキーはアプリ別接頭辞を付ける。工程表アプリ(kouteihyo)と同一github.io
+  // ドメインでlocalStorageを共有するため、'dbx_file_path'のままだと保存先を奪い合う。
+  const savedPath = localStorage.getItem('genba_dbx_file_path');
   if (!savedPath || savedPath === '/board.json' || savedPath === '/board') {
     dbxFilePath = DBX_DEFAULT_FILE_PATH;
-    localStorage.setItem('dbx_file_path', DBX_DEFAULT_FILE_PATH);
+    localStorage.setItem('genba_dbx_file_path', DBX_DEFAULT_FILE_PATH);
   } else {
     dbxFilePath = savedPath;
   }
