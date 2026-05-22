@@ -1526,7 +1526,7 @@
         <a onclick="helpJump('help-5')">5. 表示をしぼり込む</a>
         <a onclick="helpJump('help-6')">6. 現場を追加・編集・削除する</a>
         <a onclick="helpJump('help-7')">7. 編集モード</a>
-        <a onclick="helpJump('help-8')">8. コピー機能</a>
+        <a onclick="helpJump('help-8')">8. コピー・移動機能</a>
         <a onclick="helpJump('help-9')">9. メモを書く</a>
         <a onclick="helpJump('help-10')">10. 週間一覧で確認・変更する</a>
         <a onclick="helpJump('help-11')">11. 月別集計を見る</a>
@@ -1610,14 +1610,14 @@
       </ul>
       <p>ふだんの配置作業は、編集モードOFFのままで行えます。</p>
 
-      <h3 id="help-8">8. コピー機能</h3>
-      <p>黄色い <span class="hk">📋</span> ボタンを使って、配置をまとめてコピーできます。</p>
+      <h3 id="help-8">8. コピー・移動機能</h3>
+      <p>黄色い <span class="hk">📋</span> ボタンを使って、配置をまとめてコピー・移動できます。</p>
       <ul>
         <li><strong>1日分コピー</strong>：曜日見出しの 📋 を別の曜日へドラッグ。タップすると、複数の曜日にまとめてコピーする画面が開きます。</li>
         <li><strong>現場1週間分コピー</strong>：現場名の 📋 を別の現場へドラッグします。</li>
-        <li><strong>1マスコピー</strong>：マス右上の 📋 を別のマスへドラッグします。</li>
+        <li><strong>1マスのコピー・移動</strong>：マス右上の 📋 を別のマスへドラッグします。<strong>同じ日の別の現場</strong>へドラッグすると「移動」（元のマスは空になります）、<strong>別の日</strong>へドラッグすると「コピー」になります。</li>
       </ul>
-      <p>いずれもコピー前に確認メッセージが出ます。</p>
+      <p>いずれも実行前に確認メッセージが出ます。</p>
 
       <h3 id="help-9">9. メモを書く</h3>
       <ul>
@@ -2237,7 +2237,7 @@ function makeCell(siteId, dateStr, rowCls) {
   const copyBtn = document.createElement('button');
   copyBtn.className = 'cell-copy-handle';
   copyBtn.innerHTML = '📋';
-  copyBtn.title = '他のマスにドラッグしてコピー';
+  copyBtn.title = '別マスへドラッグ：同じ日＝移動／別の日＝コピー';
   cell.appendChild(copyBtn);
   const site = state.sites.find(s => s.id === siteId);
   const siteName = site ? site.name : siteId;
@@ -3582,7 +3582,8 @@ function executeCopyDragAction(type, srcKey, destKey) {
       const d = new Date(date);
       return `${name}（${DAYS_JP[d.getDay()]}曜 ${d.getMonth()+1}/${d.getDate()}）`;
     };
-    if (!confirm(`${labelFor(srcSiteId, srcDate)} を ${labelFor(destSiteId, destDate)} に上書きコピーしますか？`)) return;
+    const isCellMove = srcDate === destDate;
+    if (!confirm(`${labelFor(srcSiteId, srcDate)} を ${labelFor(destSiteId, destDate)} に${isCellMove ? '移動' : '上書きコピー'}しますか？`)) return;
     if (!state.schedule[destSiteId]) state.schedule[destSiteId] = {};
     const srcCell = state.schedule[srcSiteId] && state.schedule[srcSiteId][srcDate];
     if (srcCell && ((srcCell.magnets && srcCell.magnets.length > 0) || srcCell.note)) {
@@ -3592,6 +3593,11 @@ function executeCopyDragAction(type, srcKey, destKey) {
       };
     } else {
       state.schedule[destSiteId][destDate] = { magnets: [], note: '' };
+    }
+    // 同じ日のマス間ドラッグは「移動」: 元のマスを空にする
+    if (isCellMove) {
+      if (!state.schedule[srcSiteId]) state.schedule[srcSiteId] = {};
+      state.schedule[srcSiteId][srcDate] = { magnets: [], note: '' };
     }
   }
   saveState();
