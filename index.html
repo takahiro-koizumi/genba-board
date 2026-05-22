@@ -936,6 +936,70 @@
     cursor: pointer;
     padding: 4px 10px;
   }
+  .help-body {
+    flex: 1;
+    overflow: auto;
+    padding: 4px 6px 24px;
+    font-size: 13.5px;
+    line-height: 1.7;
+    color: #333;
+  }
+  .help-body h3 {
+    font-size: 15px;
+    margin: 22px 0 8px;
+    padding: 6px 10px;
+    background: #2b3a4a;
+    color: #fff;
+    border-radius: 4px;
+  }
+  .help-body h3:first-of-type { margin-top: 6px; }
+  .help-body h4 {
+    font-size: 13.5px;
+    margin: 14px 0 4px;
+    color: #2b3a4a;
+    border-left: 4px solid #f5c33b;
+    padding-left: 8px;
+  }
+  .help-body p { margin: 6px 0; }
+  .help-body ul { margin: 6px 0; padding-left: 22px; }
+  .help-body li { margin: 3px 0; }
+  .help-intro { color: #666; font-size: 12.5px; margin: 4px 0 8px; }
+  .help-toc {
+    background: #f5f4ec;
+    border: 1px solid #e2e0d2;
+    border-radius: 6px;
+    padding: 10px 14px;
+    margin: 4px 0 10px;
+    columns: 2;
+    column-gap: 20px;
+  }
+  .help-toc a {
+    display: block;
+    color: #1565c0;
+    cursor: pointer;
+    padding: 2px 0;
+    font-size: 12.5px;
+    break-inside: avoid;
+  }
+  .help-toc a:hover { text-decoration: underline; }
+  .hk {
+    display: inline-block;
+    background: #eef0f2;
+    border: 1px solid #c7ccd1;
+    border-radius: 4px;
+    padding: 0 6px;
+    font-size: 12px;
+    font-weight: bold;
+    white-space: nowrap;
+  }
+  .help-note {
+    background: #fff8e1;
+    border: 1px solid #f0d98c;
+    border-radius: 4px;
+    padding: 8px 12px;
+    margin: 10px 0;
+    font-size: 12.5px;
+  }
   .list-controls {
     display: flex;
     align-items: center;
@@ -1249,6 +1313,7 @@
     <span id="dbx-status" class="dbx-status" onclick="openSettings()" title="クリックで設定">
       <span class="dot"></span><span id="dbx-status-text">未接続</span>
     </span>
+    <button onclick="openHelp()" title="使い方・ヘルプ">❓ ヘルプ</button>
     <button onclick="openSettings()" title="設定">⚙</button>
   </div>
   <div class="main">
@@ -1441,6 +1506,193 @@
     </div>
     <div class="list-table-wrap">
       <table id="list-table" class="list-table"></table>
+    </div>
+  </div>
+</div>
+
+<div id="help-modal" class="modal-bg">
+  <div class="modal modal-large">
+    <div class="modal-header">
+      <h2>現場配置ボード 使い方ガイド</h2>
+      <button class="close-btn" onclick="closeHelp()">×</button>
+    </div>
+    <div class="help-body">
+      <p class="help-intro">知りたい項目をタップすると、その説明にジャンプします。背景の暗い部分をタップすると閉じます。</p>
+      <div class="help-toc">
+        <a onclick="helpJump('help-1')">1. このアプリについて</a>
+        <a onclick="helpJump('help-2')">2. 画面の見かた</a>
+        <a onclick="helpJump('help-3')">3. 人・重機・車両を配置する</a>
+        <a onclick="helpJump('help-4')">4. 週・日を切り替える</a>
+        <a onclick="helpJump('help-5')">5. 表示をしぼり込む</a>
+        <a onclick="helpJump('help-6')">6. 現場を追加・編集・削除する</a>
+        <a onclick="helpJump('help-7')">7. 編集モード</a>
+        <a onclick="helpJump('help-8')">8. コピー機能</a>
+        <a onclick="helpJump('help-9')">9. メモを書く</a>
+        <a onclick="helpJump('help-10')">10. 週間一覧で確認・変更する</a>
+        <a onclick="helpJump('help-11')">11. 月別集計を見る</a>
+        <a onclick="helpJump('help-12')">12. 色・名前・区分を変える</a>
+        <a onclick="helpJump('help-13')">13. データの保存とDropbox同期</a>
+        <a onclick="helpJump('help-14')">14. バックアップと復元</a>
+        <a onclick="helpJump('help-15')">15. PDFで印刷する</a>
+        <a onclick="helpJump('help-16')">16. 色とマークの意味</a>
+        <a onclick="helpJump('help-17')">17. 困ったとき・ヒント</a>
+      </div>
+
+      <h3 id="help-1">1. このアプリについて</h3>
+      <p>現場ごとの作業員・重機・車両の配置を、週単位で管理するアプリです。PCでもiPadでも使えます。</p>
+      <ul>
+        <li>変更は<strong>自動で保存</strong>されます。保存ボタンを押す必要はありません。</li>
+        <li>Dropboxに接続すると、<strong>全社員が同じ表を共有</strong>して編集できます（13章）。</li>
+        <li>データはブラウザ内・Dropbox・フォルダバックアップの3段構えで守られます。</li>
+      </ul>
+
+      <h3 id="help-2">2. 画面の見かた</h3>
+      <ul>
+        <li><strong>上のツールバー</strong>：週の切替や各種ボタンが並びます。</li>
+        <li><strong>中央の表</strong>：縦が現場、横が曜日（月〜日）。1マスが「ある現場の、ある1日」です。</li>
+        <li><strong>右側のプール</strong>：まだ配置していないマグネット（人・重機・車両）の置き場です。</li>
+        <li>各マスの<strong>左上の青い数字</strong>はその日その現場の人数、<strong>下の欄</strong>はメモです。</li>
+      </ul>
+
+      <h3 id="help-3">3. 人・重機・車両を配置する</h3>
+      <p>「マグネット」とは、人・重機・車両を表す色付きのタグです。</p>
+      <h4>配置する</h4>
+      <ul>
+        <li>右のプールからマグネットを、表のマスへ<strong>ドラッグ＆ドロップ</strong>します。</li>
+        <li>プールには元が残るので、同じ人を何度でも置けます。</li>
+      </ul>
+      <h4>移動する</h4>
+      <ul>
+        <li>マスに置いたマグネットを、別のマスへドラッグすると移動します。</li>
+        <li>同じマスの中でドラッグすると、並び順を変えられます。</li>
+      </ul>
+      <h4>外す</h4>
+      <ul>
+        <li>マグネット右端の小さな <strong>×</strong> をタップすると外れます。</li>
+      </ul>
+      <h4>人員・重機・車両の切替</h4>
+      <ul>
+        <li>プール上部の <span class="hk">人員</span> <span class="hk">重機</span> <span class="hk">車両</span> タブで切り替えます。</li>
+        <li>新しいマグネットは <span class="hk">＋ マグネット追加</span> で作れます。</li>
+      </ul>
+      <div class="help-note"><strong>重複の警告：</strong>同じ人を同じ日の別の現場にも置こうとすると、確認メッセージが出ます。意図しない二重配置を防ぐためです。</div>
+      <div class="help-note"><strong>iPadの操作：</strong>マグネットをドラッグするときは、少し長押ししてから動かしてください（誤操作防止のためです）。</div>
+
+      <h3 id="help-4">4. 週・日を切り替える</h3>
+      <ul>
+        <li><span class="hk">◀◀</span> <span class="hk">▶▶</span>：前の週・次の週へ（7日単位）。</li>
+        <li><span class="hk">◀</span> <span class="hk">▶</span>：1日ずつ前後にずらします。</li>
+        <li><span class="hk">今週</span>：今日を含む週に戻ります。</li>
+      </ul>
+
+      <h3 id="help-5">5. 表示をしぼり込む</h3>
+      <ul>
+        <li><span class="hk">全体</span> <span class="hk">日本人</span> <span class="hk">実習生</span> <span class="hk">特定技能</span> <span class="hk">車両</span> のボタンで、表示する種類をしぼれます。</li>
+        <li><span class="hk">車両</span> を選ぶと車両だけが表示されます。</li>
+        <li>選んだしぼり込みは、次にアプリを開いたときも保たれます。</li>
+      </ul>
+
+      <h3 id="help-6">6. 現場を追加・編集・削除する</h3>
+      <ul>
+        <li><strong>追加</strong>：<span class="hk">＋現場</span> を押し、現場名 → 期間（任意）を入力します。</li>
+        <li><strong>名前を変える</strong>：編集モード（7章）をONにして現場名を直接書き換えるか、現場名をクリックして設定画面で変更します。</li>
+        <li><strong>削除</strong>：編集モードをONにして、現場名の右の赤い <strong>×</strong> を押します（配置データも消えます）。</li>
+        <li><strong>並べ替え</strong>：現場名の左の <span class="hk">⋮⋮</span> を上下にドラッグします。</li>
+      </ul>
+
+      <h3 id="help-7">7. 編集モード</h3>
+      <p><span class="hk">編集モード</span> ボタンでON / OFFを切り替えます。ONの間だけ、次の操作ができます。</p>
+      <ul>
+        <li>現場名・期間の直接編集</li>
+        <li>現場の削除（赤い ×）</li>
+        <li>マスの一括クリア（🗑 ボタン）</li>
+        <li>プールのマグネットの削除・並べ替え</li>
+      </ul>
+      <p>ふだんの配置作業は、編集モードOFFのままで行えます。</p>
+
+      <h3 id="help-8">8. コピー機能</h3>
+      <p>黄色い <span class="hk">📋</span> ボタンを使って、配置をまとめてコピーできます。</p>
+      <ul>
+        <li><strong>1日分コピー</strong>：曜日見出しの 📋 を別の曜日へドラッグ。タップすると、複数の曜日にまとめてコピーする画面が開きます。</li>
+        <li><strong>現場1週間分コピー</strong>：現場名の 📋 を別の現場へドラッグします。</li>
+        <li><strong>1マスコピー</strong>：マス右上の 📋 を別のマスへドラッグします。</li>
+      </ul>
+      <p>いずれもコピー前に確認メッセージが出ます。</p>
+
+      <h3 id="help-9">9. メモを書く</h3>
+      <ul>
+        <li>各マスの下の欄、および右端の「備考」列に、直接文字を入力できます。</li>
+        <li>入力後、別の場所をタップすれば自動で保存されます。</li>
+      </ul>
+
+      <h3 id="help-10">10. 週間一覧で確認・変更する</h3>
+      <p><span class="hk">📋 一覧</span> で、その週の配置を一覧表で確認できます。</p>
+      <ul>
+        <li>上部で <span class="hk">人員</span> <span class="hk">重機</span> <span class="hk">車両</span> を切り替え、名前で検索もできます。</li>
+        <li>人員表の各マスは<strong>プルダウン</strong>になっていて、その人のその日の配置現場を変更できます。「（未配置）」を選ぶと配置を外せます。</li>
+        <li>プルダウンで現場を変えると、その日の他の現場からは自動で外れます。</li>
+        <li>右端に、その週の「稼働日数」が表示されます。</li>
+      </ul>
+
+      <h3 id="help-11">11. 月別集計を見る</h3>
+      <p><span class="hk">📊 月別</span> で、ひと月の人数を現場ごとに集計します。</p>
+      <ul>
+        <li>所属別（大田原工業／ガーデンホームズ／その他）に「人日（のべ人数）」で集計します。</li>
+        <li><span class="hk">◀ 前月</span> <span class="hk">次月 ▶</span> で月を切り替えられます。</li>
+        <li>現場名の左の <span class="hk">⋮⋮</span> で並べ替えできます（ボードの並び順にも反映されます）。</li>
+      </ul>
+
+      <h3 id="help-12">12. 色・名前・区分を変える</h3>
+      <p>編集モードOFFのときに、マグネットや現場名を<strong>クリック</strong>すると設定画面が開きます。</p>
+      <ul>
+        <li>名前の変更（配置済みのものも一括で変わります）</li>
+        <li>色の変更（パレットまたはカスタム色）</li>
+        <li>人員：「日本人／実習生／特定技能」の区分、「大田原工業／ガーデンホームズ／その他」の所属を切替</li>
+        <li>重機・車両：型式・メーカーなどの情報も表示されます</li>
+      </ul>
+
+      <h3 id="help-13">13. データの保存とDropbox同期</h3>
+      <ul>
+        <li>変更は自動でこの端末（ブラウザ）に保存されます。</li>
+        <li><strong>Dropbox接続</strong>：<span class="hk">⚙</span> を開き「Dropboxに接続」を押して承認するだけです。</li>
+        <li>接続すると全社員が同じデータを共有します。だれかが変更すると、他の端末に数秒で自動反映されます。</li>
+        <li>ツールバーの「同期 ○時○分」表示で、最後に同期した時刻がわかります。</li>
+        <li>社員それぞれが、自分の端末で一度「接続」すればOKです。</li>
+      </ul>
+      <div class="help-note">はじめてDropboxに接続するときは、すでに正しいデータが入っている端末から接続してください。</div>
+
+      <h3 id="help-14">14. バックアップと復元</h3>
+      <ul>
+        <li><span class="hk">💾</span>：手動バックアップ。初回に保存先フォルダを選びます（以降は同じフォルダに保存されます）。</li>
+        <li>保存先フォルダを設定しておくと、5分ごとに自動バックアップも作られます。</li>
+        <li><span class="hk">↓</span>：バックアップしたJSONファイルから復元します（全データが置き換わるので注意してください）。</li>
+      </ul>
+      <p>推奨の保存先：Dropbox → 大田原工業　工事部 → ☆施工中 → ★現場配置ボード</p>
+
+      <h3 id="help-15">15. PDFで印刷する</h3>
+      <ul>
+        <li><span class="hk">📄 PDF出力</span> を押すと印刷画面が開きます。</li>
+        <li>その週のボードがA3横で印刷されます。プリンタの代わりに「PDFに保存」を選べばPDFファイルになります。</li>
+      </ul>
+
+      <h3 id="help-16">16. 色とマークの意味</h3>
+      <ul>
+        <li><strong>青い数字（マス左上）</strong>：その日その現場の人数。曜日見出しの「計○人」はその日の合計です。</li>
+        <li><strong>実 / 特 バッジ</strong>：マグネット左の黒丸。実＝実習生、特＝特定技能。</li>
+        <li><strong>右下の丸ドット</strong>：所属マーク。緑＝ガーデンホームズ、茶＝その他。</li>
+        <li><strong>曜日の色</strong>：日曜＝赤、祝日＝青地に赤字、会社休＝青、健康診断＝緑。</li>
+        <li><strong>赤いマス（一覧表）</strong>：同じ人が同じ日に複数の現場へ配置されている状態（重複）です。</li>
+      </ul>
+
+      <h3 id="help-17">17. 困ったとき・ヒント</h3>
+      <ul>
+        <li><strong>他の人の変更が出てこない</strong>：⚙ でDropboxが「接続」になっているか確認してください。iPadはページを開き直すと最新になります。</li>
+        <li><strong>表示が古い気がする</strong>：ページを再読み込み（更新）してください。</li>
+        <li><strong>フォルダ保存ができない</strong>：フォルダへの保存はChrome / Edgeのみ対応です。Safari・Firefoxではダウンロードになります。</li>
+        <li>重機・車両は、よく使うものが最初から登録されています。</li>
+        <li>もしデータがおかしくなっても、バックアップ（14章）から復元できます。</li>
+      </ul>
+      <p class="help-intro" style="margin-top:16px;">― 現場配置ボード 使い方ガイド ―</p>
     </div>
   </div>
 </div>
@@ -2906,6 +3158,23 @@ function closeListView() {
 }
 document.getElementById('list-modal').addEventListener('click', (e) => {
   if (e.target.id === 'list-modal') closeListView();
+});
+
+// ========== Help ==========
+function openHelp() {
+  document.getElementById('help-modal').classList.add('show');
+  const body = document.querySelector('#help-modal .help-body');
+  if (body) body.scrollTop = 0;
+}
+function closeHelp() {
+  document.getElementById('help-modal').classList.remove('show');
+}
+function helpJump(id) {
+  const el = document.getElementById(id);
+  if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+document.getElementById('help-modal').addEventListener('click', (e) => {
+  if (e.target.id === 'help-modal') closeHelp();
 });
 
 function renderListTable() {
