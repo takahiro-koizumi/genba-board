@@ -1039,6 +1039,15 @@
   .list-table td.rest-day-only {
     background: #ffebee;
   }
+  .list-table .list-site-select {
+    width: 100%;
+    box-sizing: border-box;
+    font-size: 11px;
+    padding: 2px 3px;
+    border: 1px solid #c9c7b3;
+    border-radius: 3px;
+    background: #fff;
+  }
   .list-table .cell-memo {
     display: block;
     min-height: 16px;
@@ -2947,30 +2956,29 @@ function renderListTable() {
       html += `<tr class="row-${rowCls}"><td class="name">${escapeHtml(name)}</td>`;
       let workDays = 0;
       days.forEach(date => {
-        const sites = [];
+        const assigned = [];
         state.sites.forEach(site => {
           const cell = state.schedule[site.id] && state.schedule[site.id][date];
           if (cell && cell.magnets && cell.magnets.some(m => m.type === 'person' && m.label === name)) {
-            sites.push(site.name);
+            assigned.push(site);
           }
         });
         const memoKey = `person|${name}|${date}`;
         const memo = (state.cellMemo && state.cellMemo[memoKey]) || '';
-        if (sites.length > 0) {
-          workDays++;
-          const conflictCls = sites.length > 1 ? ' conflict' : '';
-          const allRestDay = sites.every(s => /休み/.test(s));
-          const allRest = !allRestDay && sites.every(s => /休み|研修/.test(s));
-          const restCls = allRestDay ? ' rest-day-only' : (allRest ? ' rest-only' : '');
-          html += `<td class="${conflictCls}${restCls}">${sites.map(s => {
-            const isRestDay = /休み/.test(s);
-            const isRest = !isRestDay && /研修/.test(s);
-            const cls = isRestDay ? ' rest-day' : (isRest ? ' rest' : '');
-            return `<span class="site-tag${cls}">${escapeHtml(s)}</span>`;
-          }).join('')}<div class="cell-memo" contenteditable="true" data-memokey="${escapeAttr(memoKey)}">${escapeHtml(memo)}</div></td>`;
-        } else {
-          html += `<td>${memo ? '' : '<span class="empty-mark" style="color:#ccc;">—</span>'}<div class="cell-memo" contenteditable="true" data-memokey="${escapeAttr(memoKey)}">${escapeHtml(memo)}</div></td>`;
-        }
+        if (assigned.length > 0) workDays++;
+        const names = assigned.map(s => s.name);
+        const conflictCls = assigned.length > 1 ? ' conflict' : '';
+        const allRestDay = assigned.length > 0 && names.every(s => /休み/.test(s));
+        const allRest = !allRestDay && assigned.length > 0 && names.every(s => /休み|研修/.test(s));
+        const restCls = allRestDay ? ' rest-day-only' : (allRest ? ' rest-only' : '');
+        const titleAttr = assigned.length > 1 ? ` title="複数配置: ${escapeAttr(names.join(', '))}"` : '';
+        const selectedId = assigned.length > 0 ? assigned[0].id : '';
+        const options = ['<option value="">（未配置）</option>'].concat(
+          state.sites.map(s => `<option value="${escapeAttr(s.id)}"${s.id === selectedId ? ' selected' : ''}>${escapeHtml(s.name)}</option>`)
+        ).join('');
+        html += `<td class="${conflictCls}${restCls}"${titleAttr}>` +
+          `<select class="list-site-select" data-person="${escapeAttr(name)}" data-date="${escapeAttr(date)}">${options}</select>` +
+          `<div class="cell-memo" contenteditable="true" data-memokey="${escapeAttr(memoKey)}">${escapeHtml(memo)}</div></td>`;
       });
       html += `<td style="text-align:center;font-weight:bold;">${workDays}</td></tr>`;
     });
@@ -3028,6 +3036,28 @@ document.getElementById('list-table').addEventListener('blur', (e) => {
   else delete state.cellMemo[key];
   saveState();
 }, true);
+
+// 一覧から個人の配置現場をプルダウンで変更する。
+// 選んだ現場に付け替えるため、その日の他現場からは一旦すべて外す（重複も解消）。
+document.getElementById('list-table').addEventListener('change', (e) => {
+  const sel = e.target;
+  if (!sel.classList || !sel.classList.contains('list-site-select')) return;
+  const name = sel.dataset.person;
+  const date = sel.dataset.date;
+  if (!name || !date) return;
+  state.sites.forEach(site => {
+    const cell = state.schedule[site.id] && state.schedule[site.id][date];
+    if (cell && cell.magnets) {
+      cell.magnets = cell.magnets.filter(m => !(m.type === 'person' && m.label === name));
+    }
+  });
+  if (sel.value) {
+    getCellData(sel.value, date).magnets.push({ id: genId(), type: 'person', label: name });
+  }
+  saveState();
+  render();
+  renderListTable();
+});
 
 // ========== Month summary ==========
 function openMonthSummary() {
