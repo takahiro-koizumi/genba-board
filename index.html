@@ -3343,6 +3343,7 @@ const DBX_APP_KEY = 'w0akss3w157oa53';
 const DBX_DEFAULT_FILE_PATH = '/大田原工業　工事部/☆施工中/★現場配置ボード/board.json';
 let dbxFilePath = DBX_DEFAULT_FILE_PATH;
 let dbxToken = null;
+let dbxPathRoot = null;
 let dbxAutoSaveTimer = null;
 let dbxLastSync = null;
 let _lastDbxRev = null; // 他端末からの更新検知用（最後に読み書きしたrev）
@@ -3504,11 +3505,39 @@ async function dbxRefreshToken() {
   return false;
 }
 
+// Dropbox Business: チーム共有フォルダはチームスペース名前空間に存在する。
+// パスルートを指定しないと絶対パスが各メンバーのホーム名前空間で解決され、
+// board.json がメンバーごとに別々に作られて共有できなくなる。
+async function dbxEnsurePathRoot() {
+  if (dbxPathRoot || !dbxToken) return;
+  try {
+    const doFetch = () => fetch('https://api.dropboxapi.com/2/users/get_current_account', {
+      method: 'POST',
+      headers: { 'Authorization': 'Bearer ' + dbxToken },
+    });
+    let resp = await doFetch();
+    if (resp.status === 401) {
+      const ok = await dbxRefreshToken();
+      if (ok) resp = await doFetch();
+    }
+    if (!resp.ok) { console.warn('[Dropbox] get_current_account failed:', resp.status); return; }
+    const acct = await resp.json();
+    const rootNs = acct && acct.root_info && acct.root_info.root_namespace_id;
+    if (rootNs) {
+      dbxPathRoot = String(rootNs);
+      console.log('[Dropbox] path root (team space) =', dbxPathRoot);
+    }
+  } catch (e) {
+    console.warn('[Dropbox] get_current_account error:', e);
+  }
+}
+
 function dbxDisconnect() {
   if (!confirm('Dropboxとの接続を切りますか？（ローカルデータは残ります）')) return;
   localStorage.removeItem('dbx_token');
   localStorage.removeItem('dbx_refresh');
   dbxToken = null;
+  dbxPathRoot = null;
   dbxLastSync = null;
   updateDbxUI();
 }
@@ -3526,6 +3555,7 @@ async function dbxApiCall(url, args, body) {
     'Authorization': 'Bearer ' + dbxToken,
     'Dropbox-API-Arg': asciiEscapeJSON(args),
   };
+  if (dbxPathRoot) headers['Dropbox-API-Path-Root'] = JSON.stringify({ '.tag': 'root', 'root': dbxPathRoot });
   if (body) headers['Content-Type'] = 'application/octet-stream';
   const doFetch = () => fetch(url, {
     method: 'POST',
@@ -3624,12 +3654,14 @@ async function dbxManualSync() {
 async function dbxCheckRemoteRev() {
   if (!dbxToken) return null;
   try {
+    const metaHeaders = {
+      'Authorization': 'Bearer ' + dbxToken,
+      'Content-Type': 'application/json',
+    };
+    if (dbxPathRoot) metaHeaders['Dropbox-API-Path-Root'] = JSON.stringify({ '.tag': 'root', 'root': dbxPathRoot });
     const doFetch = () => fetch('https://api.dropboxapi.com/2/files/get_metadata', {
       method: 'POST',
-      headers: {
-        'Authorization': 'Bearer ' + dbxToken,
-        'Content-Type': 'application/json',
-      },
+      headers: metaHeaders,
       body: JSON.stringify({ path: dbxFilePath })
     });
     let resp = await doFetch();
@@ -3685,7 +3717,7 @@ function scheduleDbxAutoSave() {
   if (!dbxToken) return;
   _dbxPending = true;
   if (dbxAutoSaveTimer) clearTimeout(dbxAutoSaveTimer);
-  dbxAutoSaveTimer = setTimeout(() => { dbxSave(true); dbxAutoSaveTimer = null; }, 2000);
+  dbxAutoSaveTimer = setTimeout(() => { dbxSave(true); dbxAutoSaveTimer = null; }, 1000);
 }
 
 // Hook into saveState
@@ -3747,7 +3779,7 @@ document.addEventListener('visibilitychange', () => {
 window.addEventListener('focus', () => { dbxAutoPullIfChanged(); });
 
 // 5秒ごとに他端末の更新を確認（iPad表示モニター用途で素早く反映）
-const DBX_POLL_INTERVAL_MS = 5 * 1000;
+const DBX_POLL_INTERVAL_MS = 2 * 1000;
 setInterval(dbxAutoPullIfChanged, DBX_POLL_INTERVAL_MS);
 
 // ========== Init ==========
@@ -3777,6 +3809,7 @@ updateDbxUI();
   dbxToken = localStorage.getItem('dbx_token');
   const handled = await dbxHandleCallback();
   if (dbxToken) {
+    await dbxEnsurePathRoot();
     const remote = await dbxLoad();
     if (remote) {
       state = remote;
