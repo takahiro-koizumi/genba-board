@@ -1135,6 +1135,11 @@
   .month-table tr.row-rest td.total-col {
     background: #90caf9;
   }
+  .month-table td.site-name-col .site-drag-handle {
+    vertical-align: middle;
+    height: 20px;
+  }
+  .month-table tr.dragging { opacity: 0.6; }
 
   /* ===== Mobile / iPad tweaks ===== */
   @media (max-width: 1024px) {
@@ -3110,9 +3115,9 @@ function renderMonthSummary() {
     if (total === 0) return; // 稼働がない現場は省略
     const cls = n => 'num' + (n === 0 ? ' zero' : '');
     const isRest = /休み|研修/.test(s.name);
-    const rowCls = isRest ? ' class="row-rest"' : '';
-    html += `<tr${rowCls}>
-      <td class="site-name-col">${escapeHtml(s.name)}</td>
+    const rowCls = 'month-row' + (isRest ? ' row-rest' : '');
+    html += `<tr class="${rowCls}" data-site-id="${s.id}">
+      <td class="site-name-col"><span class="site-drag-handle" title="ドラッグして並び替え">⋮⋮</span>${escapeHtml(s.name)}</td>
       <td class="${cls(c.ohtahara||0)}">${c.ohtahara || 0}</td>
       <td class="${cls(c.gardenhomes||0)}">${c.gardenhomes || 0}</td>
       <td class="${cls(c.other||0)}">${c.other || 0}</td>
@@ -3122,18 +3127,46 @@ function renderMonthSummary() {
 
   if (grandTotal === 0) {
     html += `<tr><td colspan="5" style="text-align:center;color:#999;padding:20px;">この月の人員配置はありません</td></tr>`;
-  } else {
-    html += `<tr class="total-row">
+  }
+  html += '</tbody>';
+
+  if (grandTotal !== 0) {
+    html += `<tfoot><tr class="total-row">
       <td class="site-name-col">合計</td>
       <td class="num">${totals.ohtahara}</td>
       <td class="num">${totals.gardenhomes}</td>
       <td class="num">${totals.other}</td>
       <td class="num total-col">${grandTotal}</td>
-    </tr>`;
+    </tr></tfoot>`;
   }
 
-  html += '</tbody>';
   document.getElementById('month-table').innerHTML = html;
+  setupMonthSortable();
+}
+
+// 月別集計の行をドラッグして state.sites（現場の並び順）を変更する。
+// 稼働ゼロの現場は月別表に出ないため、表示中の行だけ並べ替え、
+// 非表示の現場は元の絶対位置に残す。
+function setupMonthSortable() {
+  const tbody = document.querySelector('#month-table tbody');
+  if (!tbody) return;
+  if (tbody._sortable) tbody._sortable.destroy();
+  tbody._sortable = Sortable.create(tbody, {
+    draggable: 'tr.month-row',
+    handle: '.site-drag-handle',
+    animation: 50,
+    ghostClass: 'dragging',
+    onUpdate: () => {
+      const orderedIds = Array.from(tbody.querySelectorAll('tr.month-row')).map(r => r.dataset.siteId);
+      const visible = new Set(orderedIds);
+      const idMap = Object.fromEntries(state.sites.map(s => [s.id, s]));
+      let vi = 0;
+      state.sites = state.sites.map(s => visible.has(s.id) ? idMap[orderedIds[vi++]] : s);
+      saveState();
+      render();
+      renderMonthSummary();
+    },
+  });
 }
 
 document.getElementById('month-summary-modal').addEventListener('click', (e) => {
