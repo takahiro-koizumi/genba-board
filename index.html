@@ -57,6 +57,7 @@
     white-space: nowrap;
   }
   .toolbar button:active { background: rgba(255,255,255,0.25); }
+  .toolbar button:disabled { opacity: 0.35; cursor: default; background: rgba(255,255,255,0.1); }
   .toolbar button.primary {
     background: #ff6b6b;
     border-color: #ff6b6b;
@@ -1305,6 +1306,7 @@
     <button onclick="openListView()">📋 一覧</button>
     <button onclick="openMonthSummary()">📊 月別</button>
     <div class="spacer"></div>
+    <button id="undo-btn" onclick="undo()" title="元に戻す" disabled>↩ 戻る</button>
     <button id="edit-btn" class="primary" onclick="toggleEditMode()">編集モード</button>
     <button onclick="addSite()">＋現場</button>
     <button onclick="exportPDF()">📄 PDF出力</button>
@@ -1686,6 +1688,7 @@
 
       <h3 id="help-17">17. 困ったとき・ヒント</h3>
       <ul>
+        <li><strong>操作を間違えたとき</strong>：ツールバーの「↩ 戻る」ボタンで直前の操作を取り消せます（最大20回まで）。</li>
         <li><strong>他の人の変更が出てこない</strong>：⚙ でDropboxが「接続」になっているか確認してください。iPadはページを開き直すと最新になります。</li>
         <li><strong>表示が古い気がする</strong>：ページを再読み込み（更新）してください。</li>
         <li><strong>フォルダ保存ができない</strong>：フォルダへの保存はChrome / Edgeのみ対応です。Safari・Firefoxではダウンロードになります。</li>
@@ -2727,6 +2730,7 @@ function importData() {
         state = obj;
         saveState();
         render();
+        resetUndo();
       } catch(err) {
         alert('読み込みに失敗: ' + err.message);
       }
@@ -4031,6 +4035,7 @@ async function dbxAutoPullIfChanged() {
   state = remote;
   _origSaveState();
   render();
+  resetUndo();
 }
 
 async function dbxManualPull() {
@@ -4040,6 +4045,7 @@ async function dbxManualPull() {
     state = remote;
     saveState();
     render();
+    resetUndo();
     alert('最新データを取得しました');
   } else {
     alert('Dropboxにデータがありません');
@@ -4063,7 +4069,59 @@ const _origSaveState = saveState;
 saveState = function() {
   _origSaveState();
   scheduleDbxAutoSave();
+  recordUndo();
 };
+
+// ========== Undo (元に戻す) ==========
+// 直前の操作を取り消せるよう、保存のたびに state のスナップショットを履歴に積む。
+// 週送り・フィルターは「表示」なので除外し、データが変わったときだけ記録する。
+const UNDO_LIMIT = 20;
+let _undoHistory = [];
+function _undoSnapshot() {
+  // 空マスは描画のたびに getCellData が生成して増えるため、
+  // 中身のあるマスだけ抜き出して比較・記録する（週送りを履歴に積まない）。
+  const sched = {};
+  for (const sid in state.schedule) {
+    const cells = state.schedule[sid];
+    for (const date in cells) {
+      const cell = cells[date];
+      if (cell && ((cell.magnets && cell.magnets.length) || cell.note)) {
+        (sched[sid] = sched[sid] || {})[date] = cell;
+      }
+    }
+  }
+  const c = { ...state, schedule: sched };
+  delete c.weekStart;
+  delete c.viewFilter;
+  return JSON.stringify(c);
+}
+function resetUndo() {
+  _undoHistory = [_undoSnapshot()];
+  updateUndoButton();
+}
+function recordUndo() {
+  const snap = _undoSnapshot();
+  if (_undoHistory.length && snap === _undoHistory[_undoHistory.length - 1]) return;
+  _undoHistory.push(snap);
+  if (_undoHistory.length > UNDO_LIMIT + 1) _undoHistory.shift();
+  updateUndoButton();
+}
+function undo() {
+  if (_undoHistory.length <= 1) return;
+  _undoHistory.pop();
+  const data = JSON.parse(_undoHistory[_undoHistory.length - 1]);
+  data.weekStart = state.weekStart;
+  data.viewFilter = state.viewFilter;
+  state = data;
+  saveState();
+  render();
+  updateUndoButton();
+}
+function updateUndoButton() {
+  const btn = document.getElementById('undo-btn');
+  if (btn) btn.disabled = _undoHistory.length <= 1;
+}
+resetUndo();
 
 // ========== Auto-backup to local folder (periodic) ==========
 const AUTO_BACKUP_INTERVAL_MS = 5 * 60 * 1000; // 5 min
@@ -4159,6 +4217,7 @@ updateDbxUI();
     }
     updateDbxUI();
   }
+  resetUndo();
 })();
 </script>
 </body>
