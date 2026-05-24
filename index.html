@@ -4030,6 +4030,12 @@ async function dbxAutoPullIfChanged() {
   // 変化の可能性あり → silent download して内容を比較（CORS で rev 読めない端末でも検知できる）
   const remote = await dbxLoad(true);
   if (!remote) return;
+  // 空データ上書き防御：リモートのsitesが空でローカルにあれば自動pull中止
+  if (Array.isArray(remote.sites) && remote.sites.length === 0 && Array.isArray(state.sites) && state.sites.length > 0) {
+    console.warn('[Dropbox] Remote sites empty but local has data. Auto-pull skipped.');
+    if (typeof setDbxStatus === 'function') setDbxStatus('error', '空データ検出 手動取得推奨');
+    return;
+  }
   if (JSON.stringify(remote) === JSON.stringify(state)) return; // 実際は同じ
   console.log('[Dropbox] 他端末の変更を反映 (rev:', remoteRev || '?', ')');
   state = remote;
@@ -4067,6 +4073,9 @@ function scheduleDbxAutoSave() {
 // Hook into saveState
 const _origSaveState = saveState;
 saveState = function() {
+  // _dbxPendingを保存処理の最初に立てて、pull競合（ローカル変更が直前のpullで上書きされる事故）を防ぐ
+  if (dbxToken) _dbxPending = true;
+  _localPending = true;
   _origSaveState();
   scheduleDbxAutoSave();
   recordUndo();
