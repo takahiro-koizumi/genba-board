@@ -481,6 +481,75 @@
     border-color: #ddd;
   }
 
+  /* ===== 備考の書式ツールバー ===== */
+  .note-toolbar {
+    position: fixed;
+    z-index: 9000;
+    display: none;
+    align-items: center;
+    gap: 7px;
+    background: #fff;
+    border: 1px solid #d0d0d0;
+    border-radius: 9px;
+    box-shadow: 0 5px 20px rgba(0,0,0,0.22);
+    padding: 7px 10px;
+    font-size: 12px;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+  .note-toolbar.show { display: flex; }
+  .note-toolbar .nt-label { color: #888; font-size: 11px; }
+  .note-toolbar .nt-group { display: flex; align-items: center; gap: 4px; }
+  .note-toolbar .nt-sep { width: 1px; height: 22px; background: #e2e2e2; margin: 0 3px; }
+  .note-toolbar .nt-size-btn {
+    border: 1px solid #ccc;
+    background: #f7f7f7;
+    border-radius: 6px;
+    padding: 4px 9px;
+    cursor: pointer;
+    line-height: 1;
+    color: #333;
+    font-size: 13px;
+  }
+  .note-toolbar .nt-size-btn:hover { background: #eee; }
+  .note-toolbar .nt-size-btn.active {
+    background: #2563eb;
+    border-color: #2563eb;
+    color: #fff;
+  }
+  .note-toolbar .nt-color-btn {
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    cursor: pointer;
+    border: 2px solid #fff;
+    box-shadow: 0 0 0 1px #ccc;
+    padding: 0;
+  }
+  .note-toolbar .nt-color-btn.active { box-shadow: 0 0 0 2px #2563eb; }
+  .note-toolbar .nt-color-default {
+    background: #fff;
+    position: relative;
+    color: #555;
+    font-size: 9px;
+    line-height: 1;
+  }
+  .note-toolbar .nt-color-default::after {
+    content: '標';
+    position: absolute;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+  }
+  .note-toolbar .nt-custom {
+    width: 26px;
+    height: 24px;
+    padding: 0;
+    border: 1px solid #ccc;
+    border-radius: 5px;
+    cursor: pointer;
+    background: none;
+  }
+
   /* ===== Magnet ===== */
   .magnet {
     display: inline-flex;
@@ -1239,7 +1308,7 @@
       -webkit-print-color-adjust: exact !important;
       print-color-adjust: exact !important;
     }
-    .toolbar, .pool, .modal-bg { display: none !important; }
+    .toolbar, .pool, .modal-bg, .note-toolbar { display: none !important; }
     .site-drag-handle, .site-copy-handle, .day-copy-btn,
     .cell-copy-handle, .cell-reset-btn, .magnet .del { display: none !important; }
     .app { display: block !important; height: auto !important; }
@@ -1385,6 +1454,21 @@
       <button class="danger" onclick="resetColorToDefault()">標準色に戻す</button>
     </div>
   </div>
+</div>
+
+<!-- 備考の書式ツールバー（フォーカス中の備考欄に追従） -->
+<div id="note-toolbar" class="note-toolbar">
+  <span class="nt-label">大きさ</span>
+  <div class="nt-group">
+    <button type="button" class="nt-size-btn" data-size="s">小</button>
+    <button type="button" class="nt-size-btn" data-size="m">標準</button>
+    <button type="button" class="nt-size-btn" data-size="l">大</button>
+    <button type="button" class="nt-size-btn" data-size="xl">特大</button>
+  </div>
+  <span class="nt-sep"></span>
+  <span class="nt-label">色</span>
+  <div class="nt-group" id="nt-colors"></div>
+  <input type="color" id="nt-custom-color" class="nt-custom" title="その他の色" value="#e60012">
 </div>
 
 <div id="settings-modal" class="modal-bg settings-modal">
@@ -2210,13 +2294,17 @@ function makeCell(siteId, dateStr, rowCls) {
   note.textContent = data.note || '';
   note.dataset.siteId = siteId;
   note.dataset.date = dateStr;
+  styleNoteEl(note, data);
+  note.addEventListener('focus', () => showNoteToolbar(note));
   note.addEventListener('blur', onNoteBlur);
   cell.appendChild(note);
 
   // Make magnet list sortable
   Sortable.create(list, {
     group: 'magnets',
-    animation: 50,
+    animation: 0,
+    forceFallback: true,
+    fallbackTolerance: 3,
     delay: 80,
     delayOnTouchOnly: true,
     touchStartThreshold: 4,
@@ -2329,7 +2417,9 @@ function renderPool() {
   pool._sortable = Sortable.create(pool, {
     group: { name: 'magnets', pull: 'clone', put: false },
     sort: editMode,
-    animation: 50,
+    animation: 0,
+    forceFallback: true,
+    fallbackTolerance: 3,
     delay: editMode ? 60 : 80,
     delayOnTouchOnly: true,
     touchStartThreshold: 4,
@@ -2500,6 +2590,7 @@ function onNoteBlur(e) {
   const data = getCellData(el.dataset.siteId, el.dataset.date);
   data.note = el.textContent.trim();
   saveState();
+  scheduleHideNoteToolbar();
 }
 function onSiteNameBlur(e) {
   const el = e.target;
@@ -2788,6 +2879,128 @@ const COLOR_PRESETS = [
   '#2c3e50', '#34495e', '#7f8c8d', '#000000', '#8b4513', '#ff7f50',
 ];
 let colorPickerTarget = null;
+
+// ========== 備考の書式（文字サイズ・色／マス単位） ==========
+const NOTE_SIZE_MAP = { s: '9px', m: '', l: '15px', xl: '19px' };
+const NOTE_COLOR_PRESETS = [
+  { v: '',        name: '標準' },
+  { v: '#e60012', name: '赤' },
+  { v: '#1565c0', name: '青' },
+  { v: '#1b8a3a', name: '緑' },
+  { v: '#e67e22', name: 'オレンジ' },
+  { v: '#8e24aa', name: '紫' },
+];
+let activeNote = null;
+let noteToolbarLock = false;
+let hideNoteTimer = null;
+
+// cell-note 要素に保存済みの書式（サイズ・色）を適用
+function styleNoteEl(el, data) {
+  el.style.fontSize = NOTE_SIZE_MAP[data.noteSize] || '';
+  el.style.color = data.noteColor || '';
+}
+
+function applyNoteSize(size) {
+  if (!activeNote) return;
+  const data = getCellData(activeNote.dataset.siteId, activeNote.dataset.date);
+  if (size === 'm') delete data.noteSize; else data.noteSize = size;
+  styleNoteEl(activeNote, data);
+  saveState();
+  refreshNoteToolbar();
+}
+
+function applyNoteColor(color) {
+  if (!activeNote) return;
+  const data = getCellData(activeNote.dataset.siteId, activeNote.dataset.date);
+  if (!color) delete data.noteColor; else data.noteColor = color;
+  styleNoteEl(activeNote, data);
+  saveState();
+  refreshNoteToolbar();
+}
+
+// ツールバーの選択状態を現在のマスに合わせる
+function refreshNoteToolbar() {
+  if (!activeNote) return;
+  const data = getCellData(activeNote.dataset.siteId, activeNote.dataset.date);
+  const tb = document.getElementById('note-toolbar');
+  const size = data.noteSize || 'm';
+  tb.querySelectorAll('[data-size]').forEach(b => b.classList.toggle('active', b.dataset.size === size));
+  const color = (data.noteColor || '').toLowerCase();
+  tb.querySelectorAll('[data-ncolor]').forEach(b => b.classList.toggle('active', (b.dataset.ncolor || '').toLowerCase() === color));
+  const custom = document.getElementById('nt-custom-color');
+  if (custom && /^#[0-9a-f]{6}$/i.test(color)) custom.value = color;
+}
+
+// フォーカス中の備考欄のすぐ上（入らなければ下）にツールバーを配置
+function positionNoteToolbar() {
+  if (!activeNote) return;
+  const tb = document.getElementById('note-toolbar');
+  const r = activeNote.getBoundingClientRect();
+  const w = tb.offsetWidth, h = tb.offsetHeight;
+  let top = r.top - h - 6;
+  if (top < 6) top = r.bottom + 6;
+  let left = r.left + r.width / 2 - w / 2;
+  left = Math.max(6, Math.min(left, window.innerWidth - w - 6));
+  tb.style.top = top + 'px';
+  tb.style.left = left + 'px';
+}
+
+function showNoteToolbar(noteEl) {
+  activeNote = noteEl;
+  clearTimeout(hideNoteTimer);
+  document.getElementById('note-toolbar').classList.add('show');
+  refreshNoteToolbar();
+  positionNoteToolbar();
+}
+
+function hideNoteToolbar() {
+  document.getElementById('note-toolbar').classList.remove('show');
+  activeNote = null;
+}
+
+// 備考欄からフォーカスが外れたら閉じる（ツールバー操作中・別の備考欄へ移動中は閉じない）
+function scheduleHideNoteToolbar() {
+  clearTimeout(hideNoteTimer);
+  hideNoteTimer = setTimeout(() => {
+    if (noteToolbarLock) return;
+    const ae = document.activeElement;
+    if (ae && ae.classList && ae.classList.contains('cell-note')) return;
+    hideNoteToolbar();
+  }, 150);
+}
+
+function initNoteToolbar() {
+  const tb = document.getElementById('note-toolbar');
+  if (!tb) return;
+  const colorWrap = tb.querySelector('#nt-colors');
+  NOTE_COLOR_PRESETS.forEach(c => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'nt-color-btn' + (c.v === '' ? ' nt-color-default' : '');
+    b.dataset.ncolor = c.v;
+    b.title = c.name;
+    if (c.v) b.style.background = c.v;
+    b.addEventListener('click', () => applyNoteColor(c.v));
+    colorWrap.appendChild(b);
+  });
+  tb.querySelectorAll('.nt-size-btn').forEach(b => {
+    b.addEventListener('click', () => applyNoteSize(b.dataset.size));
+  });
+  // ツールバー上のクリックでは備考欄のフォーカスを外さない（カスタム色だけはネイティブ動作）
+  tb.addEventListener('mousedown', e => {
+    if (e.target.closest('#nt-custom-color')) return;
+    e.preventDefault();
+  });
+  const custom = document.getElementById('nt-custom-color');
+  custom.addEventListener('mousedown', () => { noteToolbarLock = true; });
+  custom.addEventListener('input', e => applyNoteColor(e.target.value));
+  custom.addEventListener('change', () => {
+    noteToolbarLock = false;
+    if (activeNote) activeNote.focus();
+  });
+  window.addEventListener('scroll', () => { if (activeNote) positionNoteToolbar(); }, true);
+  window.addEventListener('resize', () => { if (activeNote) positionNoteToolbar(); });
+}
 
 function textColorFor(bg) {
   if (!bg) return '';
@@ -4190,6 +4403,7 @@ setInterval(dbxAutoPullIfChanged, DBX_POLL_INTERVAL_MS);
 // ========== Init ==========
 render();
 updateDbxUI();
+initNoteToolbar();
 (async function init() {
   // 旧App Keyからのアップグレード: App Keyが変わったら古いtokenは無効なのでクリア
   const previousAppKey = localStorage.getItem('dbx_app_key');
