@@ -549,6 +549,19 @@
     cursor: pointer;
     background: none;
   }
+  .note-toolbar .nt-close {
+    border: none;
+    background: #f0f0f0;
+    color: #555;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    cursor: pointer;
+    font-size: 16px;
+    line-height: 1;
+    padding: 0;
+  }
+  .note-toolbar .nt-close:hover { background: #e57373; color: #fff; }
 
   /* ===== Magnet ===== */
   .magnet {
@@ -1469,6 +1482,8 @@
   <span class="nt-label">色</span>
   <div class="nt-group" id="nt-colors"></div>
   <input type="color" id="nt-custom-color" class="nt-custom" title="その他の色" value="#e60012">
+  <span class="nt-sep"></span>
+  <button type="button" id="nt-close" class="nt-close" title="ツールバーを閉じる">×</button>
 </div>
 
 <div id="settings-modal" class="modal-bg settings-modal">
@@ -1519,6 +1534,18 @@
       <div class="settings-help">
         Chrome / Edge で動作します（Safari / Firefox はダウンロードに切替）。<br>
         フォルダの権限はブラウザ再起動後に再付与が必要なことがあります。
+      </div>
+    </div>
+
+    <div class="settings-section">
+      <h3>備考欄の書式ツールバー</h3>
+      <p>備考欄をタップしたときに、文字の大きさ・色を変えるツールバーを出すかどうかを切り替えます。<br>
+        この設定はこの端末（ブラウザ）だけに保存されます。表示専用モニターなどでは「オフ」にできます。</p>
+      <div class="settings-row">
+        <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-size:14px;">
+          <input type="checkbox" id="note-toolbar-toggle" onchange="setNoteToolbarEnabled(this.checked)">
+          備考欄でツールバーを表示する
+        </label>
       </div>
     </div>
 
@@ -2893,6 +2920,8 @@ const NOTE_COLOR_PRESETS = [
 let activeNote = null;
 let noteToolbarLock = false;
 let hideNoteTimer = null;
+// ツールバーを出すかどうか（この端末のみ。未設定=オン）
+let noteToolbarEnabled = localStorage.getItem('genba_note_toolbar_enabled') !== 'off';
 
 // cell-note 要素に保存済みの書式（サイズ・色）を適用
 function styleNoteEl(el, data) {
@@ -2946,6 +2975,7 @@ function positionNoteToolbar() {
 }
 
 function showNoteToolbar(noteEl) {
+  if (!noteToolbarEnabled) return;
   activeNote = noteEl;
   clearTimeout(hideNoteTimer);
   document.getElementById('note-toolbar').classList.add('show');
@@ -2955,6 +2985,7 @@ function showNoteToolbar(noteEl) {
 
 function hideNoteToolbar() {
   document.getElementById('note-toolbar').classList.remove('show');
+  if (activeNote) { try { activeNote.blur(); } catch (e) {} }
   activeNote = null;
 }
 
@@ -2967,6 +2998,12 @@ function scheduleHideNoteToolbar() {
     if (ae && ae.classList && ae.classList.contains('cell-note')) return;
     hideNoteToolbar();
   }, 150);
+}
+
+function setNoteToolbarEnabled(on) {
+  noteToolbarEnabled = !!on;
+  localStorage.setItem('genba_note_toolbar_enabled', on ? 'on' : 'off');
+  if (!on) hideNoteToolbar();
 }
 
 function initNoteToolbar() {
@@ -2998,6 +3035,8 @@ function initNoteToolbar() {
     noteToolbarLock = false;
     if (activeNote) activeNote.focus();
   });
+  const closeBtn = document.getElementById('nt-close');
+  if (closeBtn) closeBtn.addEventListener('click', hideNoteToolbar);
   window.addEventListener('scroll', () => { if (activeNote) positionNoteToolbar(); }, true);
   window.addEventListener('resize', () => { if (activeNote) positionNoteToolbar(); });
 }
@@ -3908,6 +3947,7 @@ function openSettings() {
   document.getElementById('dbx-redirect-display').textContent = window.location.origin + window.location.pathname;
   updateDbxUI();
   updateBackupDirUI();
+  document.getElementById('note-toolbar-toggle').checked = noteToolbarEnabled;
   document.getElementById('settings-modal').classList.add('show');
 }
 function closeSettings() {
