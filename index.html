@@ -3815,13 +3815,14 @@ function executeCopyDragAction(type, srcKey, destKey) {
     const srcSite = state.sites.find(s => s.id === srcKey);
     const destSite = state.sites.find(s => s.id === destKey);
     if (!srcSite || !destSite) return;
-    if (!confirm(`「${srcSite.name}」の配置を「${destSite.name}」に上書きコピーしますか？`)) return;
+    if (!confirm(`「${srcSite.name}」のメンツを「${destSite.name}」に上書きコピーしますか？\n※記入したメモ・備考はコピーされません（人員のみ）`)) return;
     const srcSched = state.schedule[srcKey] || {};
     const newDest = {};
     Object.entries(srcSched).forEach(([date, cell]) => {
+      // メンツ（マグネット）のみコピー。記入した内容（メモ・備考）は引き継がない
       newDest[date] = {
         magnets: (cell.magnets || []).map(m => ({...m, id: genId()})),
-        note: cell.note || '',
+        note: '',
       };
     });
     state.schedule[destKey] = newDest;
