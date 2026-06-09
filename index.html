@@ -1558,7 +1558,7 @@
 <div id="day-copy-modal" class="modal-bg">
   <div class="modal">
     <h2 id="day-copy-title">日コピー</h2>
-    <div style="font-size:12px; color:#666; margin-bottom:6px;">コピー先（複数選択可）：</div>
+    <div style="font-size:12px; color:#666; margin-bottom:6px;">コピー先（複数選択可）：<br><span style="color:#999;">※メンツ（人員）のみコピーします。記入したメモは引き継ぎません</span></div>
     <div id="day-copy-options"></div>
     <div class="day-copy-mode">
       <label><input type="radio" name="copy-mode" value="overwrite" checked> 上書き（コピー先を置換）</label>
@@ -1731,6 +1731,7 @@
         <li><strong>1マスのコピー・移動</strong>：マス右上の 📋 を別のマスへドラッグします。<strong>同じ日の別の現場</strong>へドラッグすると「移動」（元のマスは空になります）、<strong>別の日</strong>へドラッグすると「コピー」になります。</li>
       </ul>
       <p>いずれも実行前に確認メッセージが出ます。</p>
+      <p style="color:#666;">※コピーされるのは<strong>メンツ（人員・車両）だけ</strong>です。マスに記入したメモや「備考」欄の内容は引き継がれません。<br>（同じ日の別現場への「移動」だけは、メモも一緒に移します）</p>
 
       <h3 id="help-9">9. メモを書く</h3>
       <ul>
@@ -3798,18 +3799,15 @@ function makeCopyDraggable(el, type, key, ghostLabel, tapCallback) {
 function executeCopyDragAction(type, srcKey, destKey) {
   if (type === 'day') {
     const srcD = new Date(srcKey), destD = new Date(destKey);
-    if (!confirm(`${srcD.getMonth()+1}/${srcD.getDate()} の配置を ${destD.getMonth()+1}/${destD.getDate()} に上書きコピーしますか？`)) return;
+    if (!confirm(`${srcD.getMonth()+1}/${srcD.getDate()} のメンツを ${destD.getMonth()+1}/${destD.getDate()} に上書きコピーしますか？\n※記入したメモは引き継がれません（人員のみ）`)) return;
     state.sites.forEach(site => {
       if (!state.schedule[site.id]) state.schedule[site.id] = {};
       const srcCell = state.schedule[site.id][srcKey];
-      if (srcCell && ((srcCell.magnets && srcCell.magnets.length > 0) || srcCell.note)) {
-        state.schedule[site.id][destKey] = {
-          magnets: (srcCell.magnets || []).map(m => ({...m, id: genId()})),
-          note: srcCell.note || '',
-        };
-      } else {
-        state.schedule[site.id][destKey] = { magnets: [], note: '' };
-      }
+      // メンツ（マグネット）のみコピー。記入した内容（メモ）は引き継がない
+      state.schedule[site.id][destKey] = {
+        magnets: (srcCell && srcCell.magnets ? srcCell.magnets : []).map(m => ({...m, id: genId()})),
+        note: '',
+      };
     });
   } else if (type === 'site') {
     const srcSite = state.sites.find(s => s.id === srcKey);
@@ -3843,18 +3841,21 @@ function executeCopyDragAction(type, srcKey, destKey) {
     if (!confirm(`${labelFor(srcSiteId, srcDate)} を ${labelFor(destSiteId, destDate)} に${isCellMove ? '移動' : '上書きコピー'}しますか？`)) return;
     if (!state.schedule[destSiteId]) state.schedule[destSiteId] = {};
     const srcCell = state.schedule[srcSiteId] && state.schedule[srcSiteId][srcDate];
-    if (srcCell && ((srcCell.magnets && srcCell.magnets.length > 0) || srcCell.note)) {
-      state.schedule[destSiteId][destDate] = {
-        magnets: (srcCell.magnets || []).map(m => ({...m, id: genId()})),
-        note: srcCell.note || '',
-      };
-    } else {
-      state.schedule[destSiteId][destDate] = { magnets: [], note: '' };
-    }
-    // 同じ日のマス間ドラッグは「移動」: 元のマスを空にする
+    const srcMagnets = (srcCell && srcCell.magnets ? srcCell.magnets : []);
     if (isCellMove) {
+      // 同じ日の別現場へドラッグ＝移動：マスごと（メモも含めて）移し、元マスは空にする
+      state.schedule[destSiteId][destDate] = {
+        magnets: srcMagnets.map(m => ({...m, id: genId()})),
+        note: (srcCell && srcCell.note) || '',
+      };
       if (!state.schedule[srcSiteId]) state.schedule[srcSiteId] = {};
       state.schedule[srcSiteId][srcDate] = { magnets: [], note: '' };
+    } else {
+      // 別の日へドラッグ＝コピー：メンツのみ。記入した内容（メモ）は引き継がない
+      state.schedule[destSiteId][destDate] = {
+        magnets: srcMagnets.map(m => ({...m, id: genId()})),
+        note: '',
+      };
     }
   }
   saveState();
@@ -3901,8 +3902,8 @@ function executeDayCopy() {
   state.sites.forEach(site => {
     if (!state.schedule[site.id]) state.schedule[site.id] = {};
     const srcCell = state.schedule[site.id][dayCopySource];
-    if (!srcCell || (!srcCell.magnets || srcCell.magnets.length === 0) && !srcCell.note) {
-      // Empty source cell: in overwrite mode, also empty the dest
+    if (!srcCell || !srcCell.magnets || srcCell.magnets.length === 0) {
+      // メンツのいない（空の）コピー元：上書きモードではコピー先も空にする
       if (mode === 'overwrite') {
         dests.forEach(d => { state.schedule[site.id][d] = { magnets: [], note: '' }; });
       }
@@ -3910,15 +3911,16 @@ function executeDayCopy() {
     }
     dests.forEach(dest => {
       if (mode === 'overwrite') {
+        // メンツのみ上書き。記入した内容（メモ）は引き継がない
         state.schedule[site.id][dest] = {
           magnets: (srcCell.magnets || []).map(m => ({...m, id: genId()})),
-          note: srcCell.note || '',
+          note: '',
         };
       } else {
+        // 追加（マージ）：メンツのみ足す。コピー先の既存メモは残し、コピー元のメモは引き継がない
         if (!state.schedule[site.id][dest]) state.schedule[site.id][dest] = { magnets: [], note: '' };
         const cur = state.schedule[site.id][dest];
         cur.magnets = [...(cur.magnets || []), ...(srcCell.magnets || []).map(m => ({...m, id: genId()}))];
-        if (srcCell.note) cur.note = cur.note ? `${cur.note} / ${srcCell.note}` : srcCell.note;
       }
     });
   });
