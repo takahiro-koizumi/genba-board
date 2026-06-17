@@ -1515,7 +1515,7 @@
           <button onclick="saveDbxFilePath()">保存</button>
         </div>
         <div class="settings-help" style="font-size:11px; color:#999; margin-top:6px;">
-          既定: <code>/大田原工業　工事部/☆施工中/★現場配置ボード/board.json</code><br>
+          既定: <code>/★大田原工業　工事部/☆施工中/★現場配置ボード/board.json</code><br>
           リダイレクトURI: <code id="dbx-redirect-display"></code>
         </div>
       </details>
@@ -1524,7 +1524,7 @@
     <div class="settings-section">
       <h3>バックアップ先フォルダ</h3>
       <p>💾ボタンでバックアップを取ったときの保存先フォルダ。一度選んでおけば、以降は同じフォルダに自動保存されます。<br>
-        推奨：<code>Dropbox \ 大田原工業　工事部 \ ☆施工中 \ ★現場配置ボード</code></p>
+        推奨：<code>Dropbox \ ★大田原工業　工事部 \ ☆施工中 \ ★現場配置ボード</code></p>
       <div class="settings-row">
         <label style="font-size:12px; color:#666; min-width:80px;">保存先：</label>
         <span id="backup-dir-name" style="flex:1; font-size:13px;">未設定</span>
@@ -1781,7 +1781,7 @@
         <li>保存先フォルダを設定しておくと、5分ごとに自動バックアップも作られます。</li>
         <li><span class="hk">↓</span>：バックアップしたJSONファイルから復元します（全データが置き換わるので注意してください）。</li>
       </ul>
-      <p>推奨の保存先：Dropbox → 大田原工業　工事部 → ☆施工中 → ★現場配置ボード</p>
+      <p>推奨の保存先：Dropbox → ★大田原工業　工事部 → ☆施工中 → ★現場配置ボード</p>
 
       <h3 id="help-15">15. PDFで印刷する</h3>
       <ul>
@@ -2790,7 +2790,7 @@ async function exportData() {
   if ('showDirectoryPicker' in window) {
     let handle = await loadBackupDir();
     if (!handle) {
-      if (confirm('バックアップ先フォルダを選んでください。\n（推奨：Dropbox \\ 大田原工業　工事部 \\ ☆施工中 \\ ★現場配置ボード）\n\n選択後は同じフォルダに自動保存されます。')) {
+      if (confirm('バックアップ先フォルダを選んでください。\n（推奨：Dropbox \\ ★大田原工業　工事部 \\ ☆施工中 \\ ★現場配置ボード）\n\n選択後は同じフォルダに自動保存されます。')) {
         handle = await pickBackupDir();
       }
     }
@@ -3906,7 +3906,7 @@ document.getElementById('day-copy-modal').addEventListener('click', (e) => {
 // 大田原工業 工事部 全社員で共有するための固定値
 // Full Dropbox 型のアプリで、チーム共有フォルダに直接書き込む
 const DBX_APP_KEY = 'w0akss3w157oa53';
-const DBX_DEFAULT_FILE_PATH = '/大田原工業　工事部/☆施工中/★現場配置ボード/board.json';
+const DBX_DEFAULT_FILE_PATH = '/★大田原工業　工事部/☆施工中/★現場配置ボード/board.json';
 let dbxFilePath = DBX_DEFAULT_FILE_PATH;
 let dbxToken = null;
 let dbxPathRoot = null;
@@ -4430,7 +4430,9 @@ initNoteToolbar();
   // localStorageキーはアプリ別接頭辞を付ける。工程表アプリ(kouteihyo)と同一github.io
   // ドメインでlocalStorageを共有するため、'dbx_file_path'のままだと保存先を奪い合う。
   const savedPath = localStorage.getItem('genba_dbx_file_path');
-  if (!savedPath || savedPath === '/board.json' || savedPath === '/board') {
+  // 旧フォルダ名「大田原工業　工事部」配下の保存先は新フォルダ名「★大田原工業　工事部」の既定へ移行
+  if (!savedPath || savedPath === '/board.json' || savedPath === '/board'
+      || savedPath.indexOf('/★大田原工業　工事部/') !== 0) {
     dbxFilePath = DBX_DEFAULT_FILE_PATH;
     localStorage.setItem('genba_dbx_file_path', DBX_DEFAULT_FILE_PATH);
   } else {
