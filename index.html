@@ -172,7 +172,7 @@
     font-size: 13px;
     font-weight: bold;
     color: #333;
-    box-shadow: 0 4px 16px rgba(0,0,0,0.35);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.3);
     white-space: nowrap;
   }
   .copy-drop-zone {
@@ -320,6 +320,9 @@
     flex-direction: column;
     gap: 3px;
     position: relative;
+    /* ドラッグ中のセル内変化(マグレット増減)の再フロー/再描画を当該セルに閉じ込め、
+       兄弟セル・親グリッドへの波及を断つ。絶対配置子は全てセル矩形内なのでpaintも安全。 */
+    contain: layout paint;
   }
   .cell-copy-handle {
     position: absolute;
@@ -493,6 +496,9 @@
     align-content: flex-start;
     min-height: 28px;
     flex: 1;
+    /* マグレット追加時の flex-wrap 再フローをリスト内に封じ込める。
+       paintは付けない（マグレットの影/所属ドット白縁がリスト矩形を僅かに超え得るため）。 */
+    contain: layout;
   }
   .cell-note {
     font-size: 11px;
@@ -639,9 +645,15 @@
   }
   .sortable-ghost { opacity: 0.4; }
   .sortable-chosen { transform: scale(1.05); }
-  .sortable-drag { box-shadow: 0 4px 12px rgba(0,0,0,0.3) !important; }
-  /* iPad: ドラッグ複製を独立した合成レイヤーに乗せ、グリッド再描画から切り離して追従を滑らかにする */
-  .sortable-fallback { will-change: transform; pointer-events: none; }
+  .sortable-drag { box-shadow: 0 2px 6px rgba(0,0,0,0.25) !important; }
+  /* iPad: ドラッグ複製を独立した合成レイヤーに確実に乗せ、グリッド再描画から切り離して追従を滑らかにする。
+     Safariは2D transformだけだと昇格しないことがあるため translateZ(0) を併記。 */
+  .sortable-fallback {
+    will-change: transform;
+    transform: translateZ(0);
+    backface-visibility: hidden;
+    pointer-events: none;
+  }
 
   /* ===== Pool ===== */
   .pool-tabs {
@@ -2210,8 +2222,15 @@ function renderWeekLabel() {
     `${startD.getFullYear()}年 ${formatDate(start)} 〜 ${formatDate(end)}`;
 }
 
+// makeCellで各 .magnet-list に作る Sortable インスタンスの保持先。
+// renderGrid は innerHTML='' でDOMを消すだけで Sortable は破棄されず、
+// render()（コピー/週送り/undo/並べ替え等）の度に152個ずつ孤立累積する。先に破棄する。
+let cellSortables = [];
+
 function renderGrid() {
   const grid = document.getElementById('grid');
+  cellSortables.forEach(s => { try { s.destroy(); } catch (e) {} });
+  cellSortables = [];
   grid.innerHTML = '';
 
   // Header row
@@ -2395,8 +2414,8 @@ function makeCell(siteId, dateStr, rowCls) {
   note.addEventListener('blur', onNoteBlur);
   cell.appendChild(note);
 
-  // Make magnet list sortable
-  Sortable.create(list, {
+  // Make magnet list sortable（renderGridで破棄できるようインスタンスを保持＝リーク防止）
+  cellSortables.push(Sortable.create(list, {
     group: 'magnets',
     animation: 0,
     forceFallback: true,
@@ -2408,7 +2427,7 @@ function makeCell(siteId, dateStr, rowCls) {
     onAdd: onMagnetAdd,
     onUpdate: onMagnetMove,
     onRemove: onMagnetRemove,
-  });
+  }));
 
   // Cell reset button (edit mode only)
   const resetBtn = document.createElement('button');
@@ -3827,13 +3846,40 @@ function makeCopyDraggable(el, type, key, ghostLabel, tapCallback) {
     // ポインタの最新座標だけ保持し、描画とヒットテストは rAF で1フレーム1回に間引く。
     // left/top ではなく transform で動かすことで毎フレームの再レイアウトを避ける（iPadでの追従もっさり対策）。
     let lastX = startX, lastY = startY, rafId = null;
+
+    // ドロップ先候補の矩形をドラッグ開始時に1回だけ取得してキャッシュ。
+    // 毎フレームの document.elementFromPoint+closest は強制同期レイアウトを誘発し
+    // フレーム飛び（もっさり）の主因になるため、当たり判定を矩形との数値比較に置換する。
+    let zones = null;
+    const scrollEl = document.querySelector('.grid-wrap');
+    let scrollL = 0, scrollT = 0;
+    const buildZones = () => {
+      scrollL = scrollEl ? scrollEl.scrollLeft : 0;
+      scrollT = scrollEl ? scrollEl.scrollTop : 0;
+      zones = [];
+      document.querySelectorAll(dropSelector).forEach(t => {
+        if (t.dataset[keyAttr] === key) return;       // 自分自身は対象外
+        t.classList.add('copy-drop-zone');            // ドロップ可能ゾーンの強調
+        const r = t.getBoundingClientRect();
+        zones.push({ el: t, left: r.left, top: r.top, right: r.right, bottom: r.bottom });
+      });
+    };
+    const hitTest = (x, y) => {
+      if (!zones) return null;
+      // copyドラッグ中は基本スクロールしないが、万一スクロールしたら矩形を取り直す
+      if (scrollEl && (scrollEl.scrollLeft !== scrollL || scrollEl.scrollTop !== scrollT)) buildZones();
+      let found = null;
+      for (const z of zones) {                        // DOM順で走査し最後の一致を採用（重なり時の上層優先に相当）
+        if (x >= z.left && x < z.right && y >= z.top && y < z.bottom) found = z.el;
+      }
+      return found;
+    };
+
     const applyMove = () => {
       rafId = null;
       if (!isDragging || !ghost) return;
       ghost.style.transform = `translate3d(${lastX + 14}px, ${lastY + 14}px, 0)`;
-      const under = document.elementFromPoint(lastX, lastY);
-      const tgt = under ? under.closest(dropSelector) : null;
-      const valid = tgt && tgt.dataset[keyAttr] !== key ? tgt : null;
+      const valid = hitTest(lastX, lastY);
       if (currentTarget && currentTarget !== valid) currentTarget.classList.remove('copy-drop-active');
       currentTarget = valid;
       if (currentTarget) currentTarget.classList.add('copy-drop-active');
@@ -3849,9 +3895,7 @@ function makeCopyDraggable(el, type, key, ghostLabel, tapCallback) {
         ghost.textContent = ghostLabel;
         ghost.style.transform = `translate3d(${lastX + 14}px, ${lastY + 14}px, 0)`;
         document.body.appendChild(ghost);
-        document.querySelectorAll(dropSelector).forEach(t => {
-          if (t.dataset[keyAttr] !== key) t.classList.add('copy-drop-zone');
-        });
+        buildZones();   // 矩形キャッシュ構築＋ドロップ可能ゾーンの強調を一括
       }
       if (isDragging && rafId === null) rafId = requestAnimationFrame(applyMove);
     };
