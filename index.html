@@ -678,8 +678,11 @@
   body:not(.edit-mode) .cell-copy-handle,
   body:not(.edit-mode) .day-copy-btn,
   body:not(.edit-mode) .site-copy-handle,
-  body:not(.edit-mode) .site-drag-handle { display: none !important; }
+  body:not(.edit-mode) .site-drag-handle,
+  body:not(.edit-mode) .pool .add-btn { display: none !important; }
   body:not(.edit-mode) .magnet { cursor: default; }
+  body:not(.edit-mode) .cell-note { cursor: default; }
+  body:not(.edit-mode) .site-period-input { cursor: default; }
   .sortable-ghost { opacity: 0.4; }
   .sortable-chosen { transform: scale(1.05); }
   .sortable-drag { box-shadow: 0 2px 6px rgba(0,0,0,0.25) !important; }
@@ -2346,23 +2349,23 @@ function renderGrid() {
 
     const inner = document.createElement('div');
     inner.className = 'site-name-inner';
-    inner.contentEditable = editMode ? 'true' : 'false';
     inner.innerHTML = `<span class="site-label">${escapeHtml(site.name)}</span>`;
     inner.dataset.siteId = site.id;
-    inner.addEventListener('blur', onSiteNameBlur);
+    // 現場名の変更・色は編集モードでタップ→設定モーダル（名前＋色）。閲覧中は何もしない（読み取り専用）
     inner.addEventListener('click', (e) => {
-      if (editMode) return;
       if (Sortable.active) return;
+      if (!editMode) return;
       openColorPicker('site', site.id);
     });
     nameWrap.appendChild(inner);
 
-    // 工期（期間）入力欄 — 現場名のすぐ下。空でも常に表示し、編集モード不要で直接入力できる
+    // 工期（期間）入力欄 — 現場名のすぐ下。空でも常に表示。編集モード時のみ入力可（閲覧中は読み取り専用）
     const periodInput = document.createElement('input');
     periodInput.type = 'text';
     periodInput.className = 'site-period-input';
     periodInput.value = site.period || '';
-    periodInput.placeholder = '工期（例: 5/4〜9/末）';
+    periodInput.readOnly = !editMode;
+    periodInput.placeholder = editMode ? '工期（例: 5/4〜9/末）' : '';
     periodInput.title = '工期（着工〜竣工）を入力';
     periodInput.dataset.siteId = site.id;
     // セルのクリック（色設定）やドラッグ並べ替えに吸われないようにする
@@ -2458,7 +2461,7 @@ function makeCell(siteId, dateStr, rowCls) {
 
   const note = document.createElement('div');
   note.className = 'cell-note';
-  note.contentEditable = 'true';
+  note.contentEditable = editMode ? 'true' : 'false'; // 閲覧中はメモ編集不可（読み取り専用）
   note.textContent = data.note || '';
   note.dataset.siteId = siteId;
   note.dataset.date = dateStr;
@@ -2529,6 +2532,7 @@ function makeMagnet(m) {
   el.addEventListener('click', (e) => {
     if (e.target.classList.contains('del')) return;
     if (Sortable.active) return;
+    if (!editMode) return; // 閲覧中はマグネット設定（色・名前）を開かない
     openColorPicker(m.type, m.label);
   });
   return el;
@@ -2556,6 +2560,7 @@ function renderPool() {
     el.addEventListener('click', (e) => {
       if (e.target.classList.contains('del')) return;
       if (Sortable.active) return;
+      if (!editMode) return; // 閲覧中はマグネット設定（色・名前）を開かない
       openColorPicker(activeTab, label);
     });
     return el;
