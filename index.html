@@ -428,6 +428,36 @@
     width: 7px; height: 7px; border-radius: 50%;
     background: currentColor;
   }
+  .last-editor {
+    font-size: 11px;
+    color: rgba(255,255,255,0.75);
+    white-space: nowrap;
+    cursor: pointer;
+    padding: 0 2px;
+  }
+  .last-editor:hover { color: #fff; text-decoration: underline; }
+  /* 今 操作中の端末（presence）バー */
+  .presence-bar {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 6px;
+    padding: 4px 10px;
+    background: #f1f5f9;
+    border-bottom: 1px solid #e2e8f0;
+    font-size: 12px;
+  }
+  .presence-bar.warn { background: #fef2f2; border-bottom-color: #fecaca; }
+  .presence-bar .plabel { color: #64748b; margin-right: 2px; }
+  .presence-bar .pwarn { color: #dc2626; font-weight: 600; margin-left: 4px; }
+  .pchip {
+    display: inline-flex; align-items: center; gap: 5px;
+    padding: 2px 8px; border-radius: 999px;
+    background: #fff; border: 1px solid #cbd5e1; color: #334155;
+    white-space: nowrap;
+  }
+  .pchip .pdot { width: 7px; height: 7px; border-radius: 50%; background: #16a34a; }
+  .pchip.editing { border-color: #f59e0b; background: #fff7ed; color: #b45309; }
+  .pchip.editing .pdot { background: #f59e0b; }
+  .pchip.me { font-weight: 600; }
+  .pchip .pstate { font-size: 10px; opacity: .75; }
   .settings-modal .modal { min-width: 420px; max-width: 90vw; }
   .settings-section {
     padding: 12px 0;
@@ -1447,9 +1477,11 @@
     <span id="dbx-status" class="dbx-status" onclick="openSettings()" title="クリックで設定">
       <span class="dot"></span><span id="dbx-status-text">未接続</span>
     </span>
+    <span id="last-editor-label" class="last-editor" onclick="openSettings()" title="この端末の名前を設定" style="display:none"></span>
     <button onclick="openHelp()" title="使い方・ヘルプ">❓ ヘルプ</button>
     <button onclick="openSettings()" title="設定">⚙</button>
   </div>
+  <div id="presence-bar" class="presence-bar" style="display:none"></div>
   <div class="main">
     <div class="grid-wrap">
       <div id="grid" class="grid"></div>
@@ -1569,6 +1601,18 @@
           リダイレクトURI: <code id="dbx-redirect-display"></code>
         </div>
       </details>
+    </div>
+
+    <div class="settings-section">
+      <h3>この端末の名前</h3>
+      <p>この端末（PC・iPad）につける名前です。だれかがボードを変更すると、全社員の画面に
+        「<strong>最終更新: ○○ 14:32</strong>」のように表示され、どの端末で操作したか分かります。<br>
+        この設定はこの端末だけに保存されます。例：事務所PC／小泉iPad／現場タブレット</p>
+      <div class="settings-row">
+        <label style="font-size:13px; min-width:80px;">端末名：</label>
+        <input type="text" id="device-name-input" placeholder="例：事務所PC" maxlength="24" style="flex:1;" />
+        <button class="primary" onclick="saveDeviceName()">保存</button>
+      </div>
     </div>
 
     <div class="settings-section">
@@ -2197,6 +2241,7 @@ function render() {
   document.getElementById('edit-btn').classList.toggle('active', editMode);
   applyFilterClass();
   updateFilterButtons();
+  updateLastEditorLabel();
 }
 
 function applyFilterClass() {
@@ -2770,6 +2815,8 @@ function deleteSite(id) {
 function toggleEditMode() {
   editMode = !editMode;
   render();
+  // 編集中フラグを他端末へ即反映（心拍を待たずに打つ）
+  if (typeof presenceBeat === 'function') presenceBeat();
 }
 
 // ========== Export / Import ==========
@@ -3019,6 +3066,9 @@ let noteToolbarLock = false;
 let hideNoteTimer = null;
 // ツールバーを出すかどうか（この端末のみ。未設定=オン）
 let noteToolbarEnabled = localStorage.getItem('genba_note_toolbar_enabled') !== 'off';
+
+// この端末の名前（「最終更新: ○○」表示用。この端末のみに保存）
+let deviceName = localStorage.getItem('genba_device_name') || '';
 
 // cell-note 要素に保存済みの書式（サイズ・色）を適用
 function styleNoteEl(el, data) {
@@ -4050,7 +4100,44 @@ function openSettings() {
   updateDbxUI();
   updateBackupDirUI();
   document.getElementById('note-toolbar-toggle').checked = noteToolbarEnabled;
+  document.getElementById('device-name-input').value = deviceName;
   document.getElementById('settings-modal').classList.add('show');
+}
+
+// この端末の名前を保存（最終更新表示用）
+function saveDeviceName() {
+  const v = document.getElementById('device-name-input').value.trim().slice(0, 24);
+  deviceName = v;
+  if (v) localStorage.setItem('genba_device_name', v);
+  else localStorage.removeItem('genba_device_name');
+  updateLastEditorLabel();
+  if (typeof presenceBeat === 'function') presenceBeat(); // 新しい名前を他端末へ反映
+  alert(v ? 'この端末の名前を「' + v + '」にしました。' : '端末名を消去しました。');
+}
+
+// 最終更新の時刻を短く整形（当日はHH:MM、別日はM/D HH:MM）
+function fmtEditTime(ts) {
+  if (!ts) return '';
+  const d = new Date(ts);
+  const hm = ('0' + d.getHours()).slice(-2) + ':' + ('0' + d.getMinutes()).slice(-2);
+  const now = new Date();
+  if (d.toDateString() === now.toDateString()) return hm;
+  return (d.getMonth() + 1) + '/' + d.getDate() + ' ' + hm;
+}
+
+// ツールバーの「最終更新: ○○ 14:32」表示を更新
+function updateLastEditorLabel() {
+  const el = document.getElementById('last-editor-label');
+  if (!el) return;
+  const name = state && state._lastEditor;
+  if (name) {
+    const t = fmtEditTime(state._lastEditAt);
+    el.textContent = '最終更新: ' + name + (t ? ' ' + t : '');
+    el.style.display = '';
+  } else {
+    el.textContent = '';
+    el.style.display = 'none';
+  }
 }
 function closeSettings() {
   document.getElementById('settings-modal').classList.remove('show');
@@ -4231,11 +4318,14 @@ async function dbxEnsurePathRoot() {
 
 function dbxDisconnect() {
   if (!confirm('Dropboxとの接続を切りますか？（ローカルデータは残ります）')) return;
+  stopPresence();
+  presenceLeave(); // token を消す前に自分の心拍ファイルを削除
   localStorage.removeItem('dbx_token');
   localStorage.removeItem('dbx_refresh');
   dbxToken = null;
   dbxPathRoot = null;
   dbxLastSync = null;
+  renderPresence([]);
   updateDbxUI();
 }
 
@@ -4244,25 +4334,36 @@ function asciiEscapeJSON(obj) {
     '\\u' + ('0000' + c.charCodeAt(0).toString(16)).slice(-4));
 }
 
+function dbxSleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+// 429(too_many_write_operations 等)のRetry-Afterを尊重。0.5〜3秒にクランプ。
+function dbxRetryAfterMs(resp) {
+  const ra = resp && resp.headers && resp.headers.get ? resp.headers.get('Retry-After') : null;
+  const s = ra ? parseInt(ra, 10) : 0;
+  return Math.min(Math.max(isFinite(s) ? s * 1000 : 0, 500), 3000);
+}
+
 async function dbxApiCall(url, args, body) {
   if (!dbxToken) return null;
   // 注意: download(body無し)の時は Content-Type を送らない。
   // Dropbox は application/x-www-form-urlencoded を拒否する（iPad Safari/Edge が厳格に弾く）。
-  const headers = {
-    'Authorization': 'Bearer ' + dbxToken,
-    'Dropbox-API-Arg': asciiEscapeJSON(args),
+  // ヘッダは doFetch 内で毎回作る（401リフレッシュ後に新トークンで再送するため）。
+  const doFetch = () => {
+    const headers = {
+      'Authorization': 'Bearer ' + dbxToken,
+      'Dropbox-API-Arg': asciiEscapeJSON(args),
+    };
+    if (dbxPathRoot) headers['Dropbox-API-Path-Root'] = JSON.stringify({ '.tag': 'root', 'root': dbxPathRoot });
+    if (body) headers['Content-Type'] = 'application/octet-stream';
+    return fetch(url, { method: 'POST', headers: headers, body: body || undefined });
   };
-  if (dbxPathRoot) headers['Dropbox-API-Path-Root'] = JSON.stringify({ '.tag': 'root', 'root': dbxPathRoot });
-  if (body) headers['Content-Type'] = 'application/octet-stream';
-  const doFetch = () => fetch(url, {
-    method: 'POST',
-    headers: headers,
-    body: body || undefined,
-  });
   let resp = await doFetch();
   if (resp.status === 401) {
     const ok = await dbxRefreshToken();
     if (ok) resp = await doFetch();
+  }
+  if (resp.status === 429) { // レート制限は1回だけ待って再試行（board.json保存を守る）
+    await dbxSleep(dbxRetryAfterMs(resp));
+    resp = await doFetch();
   }
   return resp;
 }
@@ -4404,7 +4505,7 @@ async function dbxManualPull() {
   if (remote) {
     if (!confirm('Dropboxから最新を取得してローカルを上書きしますか？')) return;
     state = remote;
-    saveState();
+    _origSaveState(); // 取得だけの端末を最終更新者に刻まない＆再アップロードしない（自動プルと同じ挙動）
     render();
     resetUndo();
     alert('最新データを取得しました');
@@ -4431,9 +4532,17 @@ saveState = function() {
   // _dbxPendingを保存処理の最初に立てて、pull競合（ローカル変更が直前のpullで上書きされる事故）を防ぐ
   if (dbxToken) _dbxPending = true;
   _localPending = true;
+  // 実データが変わったときだけ「最終更新」を刻む（週送り・フィルターだけの操作では更新しない）
+  const _snap = _undoSnapshot();
+  const _dataChanged = !_undoHistory.length || _snap !== _undoHistory[_undoHistory.length - 1];
+  if (_dataChanged) {
+    state._lastEditor = deviceName || '名前未設定のPC';
+    state._lastEditAt = Date.now();
+  }
   _origSaveState();
   scheduleDbxAutoSave();
-  recordUndo();
+  recordUndo(_snap); // 計算済みスナップショットを渡して再走査を省く
+  updateLastEditorLabel();
 };
 
 // ========== Undo (元に戻す) ==========
@@ -4457,14 +4566,16 @@ function _undoSnapshot() {
   const c = { ...state, schedule: sched };
   delete c.weekStart;
   delete c.viewFilter;
+  delete c._lastEditor;   // 最終更新の刻印は「データ変更」の判定・undoから除外
+  delete c._lastEditAt;
   return JSON.stringify(c);
 }
 function resetUndo() {
   _undoHistory = [_undoSnapshot()];
   updateUndoButton();
 }
-function recordUndo() {
-  const snap = _undoSnapshot();
+function recordUndo(precomputed) {
+  const snap = precomputed || _undoSnapshot();
   if (_undoHistory.length && snap === _undoHistory[_undoHistory.length - 1]) return;
   _undoHistory.push(snap);
   if (_undoHistory.length > UNDO_LIMIT + 1) _undoHistory.shift();
@@ -4477,6 +4588,10 @@ function undo() {
   data.weekStart = state.weekStart;
   data.viewFilter = state.viewFilter;
   state = data;
+  // undo も「この端末による実データ変更」→ 最終更新を刻む。
+  // saveState は履歴末尾一致で刻まないため（_dataChanged=false）ここで明示的にセットする。
+  state._lastEditor = deviceName || '名前未設定のPC';
+  state._lastEditAt = Date.now();
   saveState();
   render();
   updateUndoButton();
@@ -4529,9 +4644,13 @@ document.addEventListener('visibilitychange', () => {
     }
     // ローカルバックアップも試す
     autoBackupToFolder();
+    // 裏に回る＝もう編集していない。editing:false を一発打って他端末の「同時編集中」警告を残さない
+    if (dbxToken) presenceBeat();
   } else if (document.visibilityState === 'visible') {
     // 表に戻った時：他端末で更新されてないか即チェック
     dbxAutoPullIfChanged();
+    // 在席も即更新（自分の心拍を打ち、他端末の一覧も取り直す）
+    if (dbxToken) { presenceBeat(); presencePoll(); }
   }
 });
 
@@ -4541,6 +4660,158 @@ window.addEventListener('focus', () => { dbxAutoPullIfChanged(); });
 // 5秒ごとに他端末の更新を確認（iPad表示モニター用途で素早く反映）
 const DBX_POLL_INTERVAL_MS = 2 * 1000;
 setInterval(dbxAutoPullIfChanged, DBX_POLL_INTERVAL_MS);
+
+// ========== Presence（今 操作中の端末をリアルタイム表示）==========
+// board.json とは別に、端末ごとの心拍ファイル _presence/<id>.json を置く。
+// 各端末は自分のファイルだけ書くので、書き込み衝突（上書き事故）が起きない。
+const PRESENCE_HEARTBEAT_MS = 20000; // 自分の心拍を書く間隔
+const PRESENCE_POLL_MS = 10000;      // 他端末の在席を確認する間隔
+const PRESENCE_ONLINE_MS = 70000;    // 最新心拍から これ以内 の端末をオンライン扱い（サーバー時刻基準）
+const PRESENCE_GC_MS = 24 * 3600 * 1000; // これより古い孤児ファイルはベストエフォート削除
+let presenceBeatTimer = null;
+let presencePollTimer = null;
+let _presencePolling = false;        // presencePoll の再入ガード
+let _presenceRevCache = {};          // ファイル名 -> {rev, data}（rev一致ならDL省略）
+let deviceId = localStorage.getItem('genba_device_id');
+if (!deviceId) { deviceId = 'dev-' + dbxRandom(8); localStorage.setItem('genba_device_id', deviceId); }
+
+function presenceDir() {
+  const i = dbxFilePath.lastIndexOf('/');
+  return (i > 0 ? dbxFilePath.slice(0, i) : '') + '/_presence';
+}
+function presenceMyPath() { return presenceDir() + '/' + deviceId + '.json'; }
+
+// JSON-RPC 系（list_folder / delete）用。dbxApiCall は content系専用なので分ける。
+async function dbxRpc(url, argsObj, keepalive) {
+  if (!dbxToken) return null;
+  // ヘッダは doFetch 内で毎回作る（401リフレッシュ後に新トークンで再送するため）。
+  const doFetch = () => {
+    const h = { 'Authorization': 'Bearer ' + dbxToken, 'Content-Type': 'application/json' };
+    if (dbxPathRoot) h['Dropbox-API-Path-Root'] = JSON.stringify({ '.tag': 'root', 'root': dbxPathRoot });
+    return fetch(url, { method: 'POST', headers: h, body: JSON.stringify(argsObj), keepalive: !!keepalive });
+  };
+  let resp = await doFetch();
+  if (resp.status === 401) { const ok = await dbxRefreshToken(); if (ok) resp = await doFetch(); }
+  if (resp.status === 429) { await dbxSleep(dbxRetryAfterMs(resp)); resp = await doFetch(); }
+  return resp;
+}
+
+// 自分の心拍（名前・時刻・編集中フラグ）を書き込む
+async function presenceBeat() {
+  if (!dbxToken) return;
+  try {
+    await dbxApiCall(
+      'https://content.dropboxapi.com/2/files/upload',
+      { path: presenceMyPath(), mode: 'overwrite', mute: true, autorename: false },
+      JSON.stringify({ id: deviceId, name: deviceName || '名前未設定のPC', ts: Date.now(), editing: !!editMode && document.visibilityState === 'visible' })
+    );
+  } catch (e) { /* 心拍失敗は無視（次回で復帰） */ }
+}
+
+// _presence フォルダを一覧し、オンラインの端末だけを集めて表示
+async function presencePoll() {
+  if (!dbxToken) { renderPresence([]); return; }
+  if (_presencePolling) return; // 前回のポーリングが未完なら重ねない（遅い回線での交錯防止）
+  _presencePolling = true;
+  try {
+    // list_folder（has_more があれば continue で全ページ取得）
+    let resp = await dbxRpc('https://api.dropboxapi.com/2/files/list_folder', { path: presenceDir() });
+    if (!resp || !resp.ok) return; // エラー時は前回表示を維持（ちらつき防止）。409=フォルダ未作成もここ
+    let data = await resp.json();
+    let entries = (data.entries || []).slice();
+    let guard = 0;
+    while (data.has_more && data.cursor && guard++ < 20) {
+      resp = await dbxRpc('https://api.dropboxapi.com/2/files/list_folder/continue', { cursor: data.cursor });
+      if (!resp || !resp.ok) break;
+      data = await resp.json();
+      entries = entries.concat(data.entries || []);
+    }
+    const files = entries.filter(e => e['.tag'] === 'file' && /\.json$/i.test(e.name));
+
+    // 在席判定は「全ファイル中の最新 server_modified」からの相対で行う（各端末の壁時計に依存しない）。
+    const wallNow = Date.now();
+    let maxMod = 0;
+    const modOf = {};
+    for (const e of files) {
+      const m = Date.parse(e.server_modified || '');
+      modOf[e.name] = isFinite(m) ? m : 0;
+      if (modOf[e.name] > maxMod) maxMod = modOf[e.name];
+    }
+
+    const active = [];
+    const orphans = [];
+    for (const e of files) {
+      const m = modOf[e.name];
+      if (!m) continue;
+      if (wallNow - m > PRESENCE_GC_MS) { orphans.push(e.name); continue; } // 長期放置ファイルはGC対象
+      if (maxMod - m > PRESENCE_ONLINE_MS) continue;                        // オフライン（サーバー時刻基準）
+      if (e.name === deviceId + '.json') {
+        // 自分は最新の editMode / deviceName からその場で構築（DL不要）
+        active.push({ id: deviceId, name: deviceName || '名前未設定のPC', editing: !!editMode && document.visibilityState === 'visible' });
+        continue;
+      }
+      const cached = _presenceRevCache[e.name];
+      if (cached && cached.rev === e.rev) { active.push(cached.data); continue; } // 心拍内容が同じならDL省略
+      const dl = await dbxApiCall('https://content.dropboxapi.com/2/files/download', { path: presenceDir() + '/' + e.name }, null);
+      if (!dl || !dl.ok) continue;
+      const p = await dl.json().catch(() => null);
+      if (!p || !p.id) continue;
+      _presenceRevCache[e.name] = { rev: e.rev, data: p };
+      active.push(p);
+    }
+    renderPresence(active);
+
+    // 孤児ファイルのベストエフォート清掃（各端末が見つけたぶんを消す。競合しても無害）
+    for (const nm of orphans) {
+      delete _presenceRevCache[nm];
+      dbxRpc('https://api.dropboxapi.com/2/files/delete_v2', { path: presenceDir() + '/' + nm }).catch(() => {});
+    }
+  } catch (e) { /* 一覧失敗は無視（前回表示を維持） */ }
+  finally { _presencePolling = false; }
+}
+
+function renderPresence(list) {
+  const el = document.getElementById('presence-bar');
+  if (!el) return;
+  if (!dbxToken) { el.style.display = 'none'; el.innerHTML = ''; el.classList.remove('warn'); return; }
+  const byId = {};
+  for (const p of (list || [])) if (p && p.id) byId[p.id] = p;
+  const arr = Object.values(byId).sort((a, b) =>
+    a.id === deviceId ? -1 : b.id === deviceId ? 1 : String(a.name || '').localeCompare(String(b.name || '')));
+  if (arr.length === 0) { el.style.display = 'none'; el.innerHTML = ''; el.classList.remove('warn'); return; }
+  const editingCount = arr.filter(p => p.editing).length;
+  const chips = arr.map(p => {
+    const me = p.id === deviceId;
+    const cls = 'pchip' + (p.editing ? ' editing' : '') + (me ? ' me' : '');
+    const nm = escapeHtml(p.name || '名前未設定') + (me ? '（あなた）' : '');
+    const st = p.editing ? '編集中' : '閲覧';
+    return `<span class="${cls}"><span class="pdot"></span>${nm}<span class="pstate">${st}</span></span>`;
+  }).join('');
+  const warn = editingCount >= 2 ? `<span class="pwarn">⚠ ${editingCount}台が同時に編集中</span>` : '';
+  el.innerHTML = `<span class="plabel">操作中:</span>${chips}${warn}`;
+  el.classList.toggle('warn', editingCount >= 2);
+  el.style.display = '';
+}
+
+function startPresence() {
+  if (!dbxToken) return;
+  stopPresence();
+  presenceBeat().then(presencePoll);
+  // 裏タブでは心拍・ポーリングを止める（無駄なAPI消費とレート制限を避ける。復帰時は下の visibilitychange が即再開）
+  presenceBeatTimer = setInterval(() => { if (document.visibilityState === 'visible') presenceBeat(); }, PRESENCE_HEARTBEAT_MS);
+  presencePollTimer = setInterval(() => { if (document.visibilityState === 'visible') presencePoll(); }, PRESENCE_POLL_MS);
+}
+function stopPresence() {
+  if (presenceBeatTimer) { clearInterval(presenceBeatTimer); presenceBeatTimer = null; }
+  if (presencePollTimer) { clearInterval(presencePollTimer); presencePollTimer = null; }
+}
+// 離脱時に自分の心拍ファイルを消す（ベストエフォート。失敗してもタイムアウトで消える）
+// useKeepalive: ページ離脱(pagehide)時のみtrue。切断ボタン(ページ存命)からは通常fetchで確実に送る。
+function presenceLeave(useKeepalive) {
+  if (!dbxToken) return;
+  dbxRpc('https://api.dropboxapi.com/2/files/delete_v2', { path: presenceMyPath() }, !!useKeepalive).catch(() => {});
+}
+window.addEventListener('pagehide', () => presenceLeave(true));
 
 // ========== Init ==========
 render();
@@ -4583,6 +4854,7 @@ initNoteToolbar();
       await dbxSave(false);
     }
     updateDbxUI();
+    startPresence();
   }
   resetUndo();
 })();
