@@ -673,6 +673,13 @@
   .magnet .del:hover, .magnet .del:active {
     background: rgba(220,53,69,0.85);
   }
+  /* 閲覧中（編集モードOFF）は配置を変える操作を隠す＝読み取り専用。編集モードで再表示 */
+  body:not(.edit-mode) .magnet .del,
+  body:not(.edit-mode) .cell-copy-handle,
+  body:not(.edit-mode) .day-copy-btn,
+  body:not(.edit-mode) .site-copy-handle,
+  body:not(.edit-mode) .site-drag-handle { display: none !important; }
+  body:not(.edit-mode) .magnet { cursor: default; }
   .sortable-ghost { opacity: 0.4; }
   .sortable-chosen { transform: scale(1.05); }
   .sortable-drag { box-shadow: 0 2px 6px rgba(0,0,0,0.25) !important; }
@@ -2403,6 +2410,7 @@ function renderGrid() {
   grid._sortable = Sortable.create(grid, {
     draggable: '.site-row',
     handle: '.site-drag-handle',
+    disabled: !editMode, // 閲覧中は現場の並び替え不可（編集モードのみ）
     animation: 50,
     ghostClass: 'dragging',
     // ドラッグ中に内側スクロール領域(.grid-wrap)を自動スクロールさせる。
@@ -2462,6 +2470,7 @@ function makeCell(siteId, dateStr, rowCls) {
   // Make magnet list sortable（renderGridで破棄できるようインスタンスを保持＝リーク防止）
   cellSortables.push(Sortable.create(list, {
     group: 'magnets',
+    disabled: !editMode, // 閲覧中はマグネットを動かせない（編集モードのみ）
     animation: 0,
     forceFallback: true,
     fallbackOnBody: true,
@@ -2577,6 +2586,7 @@ function renderPool() {
   if (pool._sortable) pool._sortable.destroy();
   pool._sortable = Sortable.create(pool, {
     group: { name: 'magnets', pull: 'clone', put: false },
+    disabled: !editMode, // 閲覧中はプールからマグネットを置けない（編集モードのみ）
     sort: editMode,
     animation: 0,
     forceFallback: true,
@@ -3884,6 +3894,7 @@ const COPY_DRAG_CONFIG = {
 
 function makeCopyDraggable(el, type, key, ghostLabel, tapCallback) {
   el.addEventListener('pointerdown', (e) => {
+    if (!editMode) return; // 閲覧中はコピー/移動ドラッグを開始しない（編集モードのみ）
     if (e.button !== undefined && e.button !== 0) return;
     const startX = e.clientX, startY = e.clientY;
     let isDragging = false;
