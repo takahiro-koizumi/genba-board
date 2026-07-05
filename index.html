@@ -458,6 +458,21 @@
   .pchip.editing .pdot { background: #f59e0b; }
   .pchip.me { font-weight: 600; }
   .pchip .pstate { font-size: 10px; opacity: .75; }
+  /* 編集履歴モーダル */
+  .history-list { max-height: 55vh; overflow-y: auto; margin-top: 6px; }
+  .history-day {
+    font-size: 12px; font-weight: bold; color: #64748b;
+    margin: 10px 0 2px; padding: 3px 0; position: sticky; top: 0; background: #fff;
+    border-bottom: 1px solid #e2e8f0;
+  }
+  .history-item {
+    display: flex; align-items: baseline; gap: 8px;
+    padding: 5px 4px; border-bottom: 1px solid #f2f2f2; font-size: 13px;
+  }
+  .history-item .h-time { color: #888; min-width: 42px; font-variant-numeric: tabular-nums; }
+  .history-item .h-dev { font-weight: 600; color: #333; }
+  .history-item .h-count { margin-left: auto; font-size: 11px; color: #999; white-space: nowrap; }
+  .history-empty { color: #999; font-size: 13px; padding: 14px 2px; }
   .settings-modal .modal { min-width: 420px; max-width: 90vw; }
   .settings-section {
     padding: 12px 0;
@@ -1487,7 +1502,8 @@
     <span id="dbx-status" class="dbx-status" onclick="openSettings()" title="クリックで設定">
       <span class="dot"></span><span id="dbx-status-text">未接続</span>
     </span>
-    <span id="last-editor-label" class="last-editor" onclick="openSettings()" title="この端末の名前を設定" style="display:none"></span>
+    <span id="last-editor-label" class="last-editor" onclick="openHistory()" title="編集履歴を見る" style="display:none"></span>
+    <button onclick="openHistory()" title="編集履歴（いつ・どの端末が編集したか）">🕘 履歴</button>
     <button onclick="openHelp()" title="使い方・ヘルプ">❓ ヘルプ</button>
     <button onclick="openSettings()" title="設定">⚙</button>
   </div>
@@ -1671,6 +1687,19 @@
     <div class="modal-actions">
       <button onclick="closeDayCopy()">キャンセル</button>
       <button class="primary" onclick="executeDayCopy()">コピー実行</button>
+    </div>
+  </div>
+</div>
+
+<div id="history-modal" class="modal-bg settings-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <h2>編集履歴</h2>
+      <button class="close-btn" onclick="closeHistory()">×</button>
+    </div>
+    <div class="settings-section" style="border-bottom:none;">
+      <p style="font-size:12px; color:#666;">いつ・どの端末（PC/iPad）が盤面を編集したかの記録です。同じ端末の連続した編集は1件にまとめています。<br>最新200件を自動で保持し、古い記録は自動的に消えます。</p>
+      <div id="history-list" class="history-list"></div>
     </div>
   </div>
 </div>
@@ -4155,6 +4184,59 @@ function updateLastEditorLabel() {
     el.style.display = 'none';
   }
 }
+
+// ========== 編集履歴（いつ・どの端末が編集したか。board.json に相乗りして全社共有）==========
+const HISTORY_LIMIT = 200;                 // 保持する最大件数（古いものから捨てる）
+const HISTORY_COALESCE_MS = 5 * 60 * 1000; // 同一端末の連続編集は5分でまとめる
+
+function recordHistory(name, now) {
+  if (!Array.isArray(state._history)) state._history = [];
+  const h = state._history;
+  const last = h[h.length - 1];
+  if (last && last.device === name && (now - last.at) < HISTORY_COALESCE_MS) {
+    last.at = now; last.count = (last.count || 1) + 1;   // 直近の同一端末の編集にまとめる
+  } else {
+    h.push({ device: name, at: now, count: 1 });
+    if (h.length > HISTORY_LIMIT) h.splice(0, h.length - HISTORY_LIMIT);
+  }
+}
+
+// 「この端末による実データ変更」の刻印＋履歴記録（saveState・undo から共通で呼ぶ）
+function stampEditor() {
+  const name = deviceName || '名前未設定のPC';
+  const now = Date.now();
+  state._lastEditor = name;
+  state._lastEditAt = now;
+  recordHistory(name, now);
+}
+
+function openHistory() {
+  renderHistory();
+  document.getElementById('history-modal').classList.add('show');
+}
+function closeHistory() {
+  document.getElementById('history-modal').classList.remove('show');
+}
+function renderHistory() {
+  const el = document.getElementById('history-list');
+  if (!el) return;
+  const h = Array.isArray(state._history) ? state._history : [];
+  if (!h.length) { el.innerHTML = '<div class="history-empty">まだ編集履歴はありません。</div>'; return; }
+  let html = '', lastDay = '';
+  for (let i = h.length - 1; i >= 0; i--) {   // 新しい順
+    const e = h[i];
+    const d = new Date(e.at);
+    const day = `${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()}（${DAYS_JP[d.getDay()]}）`;
+    if (day !== lastDay) { html += `<div class="history-day">${day}</div>`; lastDay = day; }
+    const hm = ('0' + d.getHours()).slice(-2) + ':' + ('0' + d.getMinutes()).slice(-2);
+    const cnt = (e.count && e.count > 1) ? `<span class="h-count">${e.count}件の変更</span>` : '';
+    html += `<div class="history-item"><span class="h-time">${hm}</span><span class="h-dev">${escapeHtml(e.device || '不明な端末')}</span>${cnt}</div>`;
+  }
+  el.innerHTML = html;
+}
+document.getElementById('history-modal').addEventListener('click', (e) => {
+  if (e.target.id === 'history-modal') closeHistory();
+});
 function closeSettings() {
   document.getElementById('settings-modal').classList.remove('show');
 }
@@ -4552,8 +4634,7 @@ saveState = function() {
   const _snap = _undoSnapshot();
   const _dataChanged = !_undoHistory.length || _snap !== _undoHistory[_undoHistory.length - 1];
   if (_dataChanged) {
-    state._lastEditor = deviceName || '名前未設定のPC';
-    state._lastEditAt = Date.now();
+    stampEditor(); // 最終更新の刻印＋編集履歴の記録
   }
   _origSaveState();
   scheduleDbxAutoSave();
@@ -4584,6 +4665,7 @@ function _undoSnapshot() {
   delete c.viewFilter;
   delete c._lastEditor;   // 最終更新の刻印は「データ変更」の判定・undoから除外
   delete c._lastEditAt;
+  delete c._history;      // 編集履歴も同様に除外（履歴追加が「データ変更」扱いにならないように）
   return JSON.stringify(c);
 }
 function resetUndo() {
@@ -4603,11 +4685,11 @@ function undo() {
   const data = JSON.parse(_undoHistory[_undoHistory.length - 1]);
   data.weekStart = state.weekStart;
   data.viewFilter = state.viewFilter;
+  data._history = state._history; // 履歴はundoスナップショットに含まれないので引き継ぐ（消さない）
   state = data;
-  // undo も「この端末による実データ変更」→ 最終更新を刻む。
-  // saveState は履歴末尾一致で刻まないため（_dataChanged=false）ここで明示的にセットする。
-  state._lastEditor = deviceName || '名前未設定のPC';
-  state._lastEditAt = Date.now();
+  // undo も「この端末による実データ変更」→ 最終更新の刻印＋履歴記録。
+  // saveState は履歴末尾一致で刻まないため（_dataChanged=false）ここで明示的に呼ぶ。
+  stampEditor();
   saveState();
   render();
   updateUndoButton();
