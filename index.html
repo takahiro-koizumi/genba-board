@@ -1827,7 +1827,7 @@
         <li>プール上部の <span class="hk">人員</span> <span class="hk">重機</span> <span class="hk">車両</span> タブで切り替えます。</li>
         <li>新しいマグネットは <span class="hk">＋ マグネット追加</span> で作れます。</li>
       </ul>
-      <div class="help-note"><strong>重複の警告：</strong>同じ人を同じ日の別の現場にも置こうとすると、確認メッセージが出ます。意図しない二重配置を防ぐためです。</div>
+      <div class="help-note"><strong>重複の警告：</strong>同じ人・重機・車両を同じ日の別の現場にも置こうとすると、確認メッセージが出ます。<strong>備考欄</strong>でも、同じ重機・車両が別の現場と重複すると確認が出ます（人の名前は備考欄では確認しません）。意図しない二重配置を防ぐためです。</div>
       <div class="help-note"><strong>iPadの操作：</strong>マグネットをドラッグするときは、少し長押ししてから動かしてください（誤操作防止のためです）。</div>
 
       <h3 id="help-4">4. 週・日を切り替える</h3>
@@ -2701,7 +2701,8 @@ function readCellFromDom(siteId, dateStr) {
 
 // ========== Sortable handlers ==========
 function findDuplicateOnDay(dateStr, type, label, excludeMagnetEl) {
-  if (dateStr === '__note__') return null;
+  // 備考(__note__)列は重機・車両のみ重複チェック（人員はメモ用途があるため対象外）
+  if (dateStr === '__note__' && type !== 'equipment' && type !== 'vehicle') return null;
   const lists = document.querySelectorAll(`.magnet-list[data-date="${dateStr}"]`);
   for (const list of lists) {
     const magnets = list.querySelectorAll('.magnet');
@@ -2734,8 +2735,9 @@ function onMagnetAdd(evt) {
   if (dup) {
     const dupSite = state.sites.find(s => s.id === dup.siteId);
     const dupSiteName = dupSite ? dupSite.name : dup.siteId;
+    const isNote = dateStr === '__note__';
     const d = new Date(dateStr);
-    const dateLabel = `${d.getMonth()+1}/${d.getDate()}（${DAYS_JP[d.getDay()]}）`;
+    const dateLabel = isNote ? '備考欄' : `${d.getMonth()+1}/${d.getDate()}（${DAYS_JP[d.getDay()]}）`;
     const ok = confirm(`「${item.dataset.label}」は ${dateLabel} に「${dupSiteName}」へ既に配置されています。\n重複しても配置しますか？`);
     if (!ok) {
       item.remove();
