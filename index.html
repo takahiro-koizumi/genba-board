@@ -69,6 +69,109 @@
     border-color: #ffd93d;
   }
 
+  /* ===== ツールバー右の「︙」メニュー ===== */
+  .menu-wrap { position: relative; display: inline-flex; }
+  .toolbar .menu-btn {
+    position: relative;
+    font-size: 20px;
+    line-height: 1;
+    padding: 6px 10px;
+    min-width: 40px;
+  }
+  .menu-btn.open { background: rgba(255,255,255,0.28); }
+  .menu-btn .st-dot {
+    position: absolute;
+    top: 4px; right: 4px;
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: #9ca3af; /* 未接続=グレー */
+    border: 1px solid rgba(0,0,0,0.25);
+  }
+  .menu-btn.st-connected .st-dot { background: #22c55e; }
+  .menu-btn.st-syncing   .st-dot { background: #3b82f6; }
+  .menu-btn.st-error     .st-dot { background: #ef4444; }
+  .app-menu {
+    position: absolute;
+    top: calc(100% + 6px);
+    right: 0;
+    min-width: 232px;
+    max-height: 82vh;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    background: #fff;
+    color: #222;
+    border-radius: 10px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.30);
+    padding: 8px;
+    z-index: 1000;
+  }
+  .menu-section-label {
+    font-size: 11px;
+    color: #8a8a8a;
+    font-weight: bold;
+    padding: 8px 8px 2px;
+  }
+  .app-menu .menu-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    text-align: left;
+    background: transparent;
+    border: 0;
+    color: #222;
+    padding: 11px 10px;
+    border-radius: 8px;
+    font-size: 15px;
+    cursor: pointer;
+    min-height: 44px;
+    white-space: normal;
+  }
+  .app-menu .menu-item:active { background: #eef1f4; }
+  .app-menu .menu-item .mi-ico { width: 22px; text-align: center; font-size: 16px; flex-shrink: 0; }
+  .menu-divider { height: 1px; background: #ececec; margin: 6px 4px; }
+  /* メニュー内のフィルタは横並びセグメント */
+  .app-menu .filter-group {
+    display: flex;
+    flex-wrap: wrap;
+    background: #f0f0ea;
+    margin: 2px 4px 6px;
+    gap: 2px;
+  }
+  .app-menu .filter-group button {
+    flex: 1 1 auto;
+    color: #555;
+    min-height: 38px;
+    font-size: 13px;
+    white-space: nowrap;
+  }
+  .app-menu .filter-group button.active { background: #2b3a4a; color: #fff; font-weight: bold; }
+  .menu-status-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    padding: 6px 8px 2px;
+  }
+  .app-menu .dbx-status { color: #333; background: #f0f0ea; border-color: #ddd; }
+  .app-menu .dbx-status.connected { color: #fff; background: #16a34a; }
+  .app-menu .dbx-status.syncing   { color: #fff; background: #2563eb; }
+  .app-menu .dbx-status.error     { color: #fff; background: #dc2626; }
+  .app-menu .last-editor { color: #555; }
+  /* 絞り込み中チップ（フィルタが「全体」以外のとき表示） */
+  .active-filter-chip {
+    display: inline-flex;
+    align-items: center;
+    background: #ffd93d;
+    color: #222;
+    font-size: 12px;
+    font-weight: bold;
+    padding: 4px 9px;
+    border-radius: 12px;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+
   /* ===== Main layout ===== */
   .main {
     display: flex;
@@ -1265,6 +1368,7 @@
     line-height: 1.2;
   }
   .list-table td.conflict { background: #ffe5e5; }
+  .list-table td.unassigned { background: #ffec99; }
   .list-table .site-tag {
     display: inline-block;
     background: rgba(43,58,74,0.1);
@@ -1410,6 +1514,16 @@
     .toolbar h1 { display: none; }
     .pool { width: 150px; }
   }
+  @media (max-width: 640px) {
+    .toolbar { gap: 4px; padding: 6px 8px; }
+    .toolbar button { padding: 7px 9px; font-size: 13px; }
+    .week-jump { display: none; }              /* ◀◀ ▶▶ は隠す（◀ 今週 ▶ は残す） */
+    .btn-lbl { display: none; }                /* 「戻る」「モード」を隠しアイコン/短縮表示に */
+    #week-label { font-size: 12px; margin: 0 4px; white-space: nowrap; }
+    #edit-btn { padding: 7px 10px; }
+    .toolbar .menu-btn { font-size: 20px; padding: 6px 9px; min-width: 38px; }
+    .app-menu { min-width: 210px; }
+  }
 
   /* ===== Print / PDF ===== */
   @media print {
@@ -1477,35 +1591,51 @@
 <div class="app">
   <div class="toolbar">
     <h1>現場配置ボード</h1>
-    <button onclick="prevWeek()" title="前週 (-7日)">◀◀</button>
+    <button class="week-jump" onclick="prevWeek()" title="前週 (-7日)">◀◀</button>
     <button onclick="prevDay()" title="前日 (-1日)">◀</button>
     <button onclick="thisWeek()">今週</button>
     <button onclick="nextDay()" title="次日 (+1日)">▶</button>
-    <button onclick="nextWeek()" title="次週 (+7日)">▶▶</button>
+    <button class="week-jump" onclick="nextWeek()" title="次週 (+7日)">▶▶</button>
     <span id="week-label" style="margin: 0 8px; font-weight: bold;"></span>
-    <div class="filter-group" id="filter-group">
-      <button data-filter="all" class="active" onclick="setViewFilter('all')">全体</button>
-      <button data-filter="jp" onclick="setViewFilter('jp')">日本人</button>
-      <button data-filter="trainee" onclick="setViewFilter('trainee')">実習生</button>
-      <button data-filter="tokutei" onclick="setViewFilter('tokutei')">特定技能</button>
-      <button data-filter="vehicle" onclick="setViewFilter('vehicle')">車両</button>
-    </div>
-    <button onclick="openListView()">📋 一覧</button>
-    <button onclick="openMonthSummary()">📊 月別</button>
+    <span id="active-filter-chip" class="active-filter-chip" onclick="setViewFilter('all')" style="display:none" title="タップで全体表示に戻す"></span>
     <div class="spacer"></div>
-    <button id="undo-btn" onclick="undo()" title="元に戻す" disabled>↩ 戻る</button>
-    <button id="edit-btn" class="primary" onclick="toggleEditMode()">編集モード</button>
-    <button onclick="addSite()">＋現場</button>
-    <button onclick="exportPDF()">📄 PDF出力</button>
-    <button onclick="exportData()" title="JSONバックアップ">💾</button>
-    <button onclick="importData()" title="JSONから復元">↓</button>
-    <span id="dbx-status" class="dbx-status" onclick="openSettings()" title="クリックで設定">
-      <span class="dot"></span><span id="dbx-status-text">未接続</span>
-    </span>
-    <span id="last-editor-label" class="last-editor" onclick="openHistory()" title="編集履歴を見る" style="display:none"></span>
-    <button onclick="openHistory()" title="編集履歴（いつ・どの端末が編集したか）">🕘 履歴</button>
-    <button onclick="openHelp()" title="使い方・ヘルプ">❓ ヘルプ</button>
-    <button onclick="openSettings()" title="設定">⚙</button>
+    <button id="undo-btn" onclick="undo()" title="元に戻す" disabled>↩<span class="btn-lbl"> 戻る</span></button>
+    <button id="edit-btn" class="primary" onclick="toggleEditMode()">編集<span class="btn-lbl">モード</span></button>
+    <div class="menu-wrap">
+      <button id="menu-btn" class="menu-btn" onclick="toggleMenu(event)" title="メニュー" aria-haspopup="true" aria-expanded="false"><span class="st-dot"></span><span class="menu-ico">︙</span></button>
+      <div id="app-menu" class="app-menu" style="display:none" role="menu">
+        <div class="menu-section-label">表示切替</div>
+        <div class="filter-group" id="filter-group">
+          <button data-filter="all" class="active" onclick="setViewFilter('all'); closeMenu()">全体</button>
+          <button data-filter="jp" onclick="setViewFilter('jp'); closeMenu()">日本人</button>
+          <button data-filter="trainee" onclick="setViewFilter('trainee'); closeMenu()">実習生</button>
+          <button data-filter="tokutei" onclick="setViewFilter('tokutei'); closeMenu()">特定技能</button>
+          <button data-filter="vehicle" onclick="setViewFilter('vehicle'); closeMenu()">車両</button>
+        </div>
+        <button class="menu-item" onclick="openListView(); closeMenu()"><span class="mi-ico">📋</span>一覧</button>
+        <button class="menu-item" onclick="openMonthSummary(); closeMenu()"><span class="mi-ico">📊</span>月別集計</button>
+        <div class="menu-divider"></div>
+        <div class="menu-section-label">編集</div>
+        <button class="menu-item" onclick="addSite(); closeMenu()"><span class="mi-ico">＋</span>現場を追加</button>
+        <div class="menu-divider"></div>
+        <div class="menu-section-label">出力・データ</div>
+        <button class="menu-item" onclick="exportPDF(); closeMenu()"><span class="mi-ico">📄</span>PDF出力</button>
+        <button class="menu-item" onclick="exportData(); closeMenu()"><span class="mi-ico">💾</span>バックアップ保存</button>
+        <button class="menu-item" onclick="importData(); closeMenu()"><span class="mi-ico">↓</span>バックアップから復元</button>
+        <div class="menu-divider"></div>
+        <div class="menu-section-label">その他</div>
+        <button class="menu-item" onclick="openHistory(); closeMenu()"><span class="mi-ico">🕘</span>編集履歴</button>
+        <button class="menu-item" onclick="openHelp(); closeMenu()"><span class="mi-ico">❓</span>使い方・ヘルプ</button>
+        <button class="menu-item" onclick="openSettings(); closeMenu()"><span class="mi-ico">⚙</span>設定</button>
+        <div class="menu-divider"></div>
+        <div class="menu-status-row">
+          <span id="dbx-status" class="dbx-status" onclick="openSettings(); closeMenu()" title="クリックで設定">
+            <span class="dot"></span><span id="dbx-status-text">未接続</span>
+          </span>
+          <span id="last-editor-label" class="last-editor" onclick="openHistory(); closeMenu()" title="編集履歴を見る" style="display:none"></span>
+        </div>
+      </div>
+    </div>
   </div>
   <div id="presence-bar" class="presence-bar" style="display:none"></div>
   <div class="main">
@@ -2013,7 +2143,7 @@ const COMPANY_HOLIDAYS_BLUE = new Set([
   '2026-04-11', '2026-04-25',
   '2026-05-02', '2026-05-23',
   '2026-06-06', '2026-06-13', '2026-06-27',
-  '2026-07-11', '2026-07-25',
+  '2026-07-04', '2026-07-25',
   '2026-08-08', '2026-08-10', '2026-08-12', '2026-08-13', '2026-08-14', '2026-08-15', '2026-08-29',
   '2026-09-19', '2026-09-26',
   '2026-10-10', '2026-10-24',
@@ -2334,15 +2464,64 @@ function updateFilterButtons() {
       b.classList.toggle('active', b.dataset.filter === state.viewFilter);
     });
   });
+  // フィルタが「全体」以外のとき、ツールバーに絞り込みチップを表示（メニュー内なので気づき用）
+  const chip = document.getElementById('active-filter-chip');
+  if (chip) {
+    const names = { jp: '日本人', trainee: '実習生', tokutei: '特定技能', vehicle: '車両' };
+    if (state.viewFilter && state.viewFilter !== 'all' && names[state.viewFilter]) {
+      chip.textContent = '絞込: ' + names[state.viewFilter] + ' ✕';
+      chip.style.display = '';
+    } else {
+      chip.style.display = 'none';
+    }
+  }
+}
+
+// ===== ツールバーの「︙」メニュー 開閉 =====
+function toggleMenu(e) {
+  if (e) e.stopPropagation();
+  const m = document.getElementById('app-menu');
+  const btn = document.getElementById('menu-btn');
+  const open = !m.style.display || m.style.display === 'none';
+  m.style.display = open ? 'block' : 'none';
+  btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+  btn.classList.toggle('open', open);
+}
+function closeMenu() {
+  const m = document.getElementById('app-menu');
+  const btn = document.getElementById('menu-btn');
+  if (m) m.style.display = 'none';
+  if (btn) { btn.setAttribute('aria-expanded', 'false'); btn.classList.remove('open'); }
+}
+// メニュー外クリック・Escで閉じる
+document.addEventListener('click', (e) => {
+  const wrap = document.querySelector('.menu-wrap');
+  if (wrap && !wrap.contains(e.target)) closeMenu();
+});
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeMenu(); });
+// Dropbox同期状態を「︙」ボタンの小さなドットに反映（一目で接続/同期/エラーが分かるように）
+function syncMenuBadge() {
+  const s = document.getElementById('dbx-status');
+  const btn = document.getElementById('menu-btn');
+  if (!s || !btn) return;
+  btn.classList.remove('st-connected', 'st-syncing', 'st-error');
+  if (s.classList.contains('syncing')) btn.classList.add('st-syncing');
+  else if (s.classList.contains('error')) btn.classList.add('st-error');
+  else if (s.classList.contains('connected')) btn.classList.add('st-connected');
 }
 
 function renderWeekLabel() {
   const start = state.weekStart;
   const end = addDays(start, 6);
   const startD = new Date(start);
-  document.getElementById('week-label').textContent =
-    `${startD.getFullYear()}年 ${formatDate(start)} 〜 ${formatDate(end)}`;
+  // スマホ幅では年を省いてコンパクトに（1段に収める）
+  const narrow = window.innerWidth <= 640;
+  document.getElementById('week-label').textContent = narrow
+    ? `${formatDate(start)}〜${formatDate(end)}`
+    : `${startD.getFullYear()}年 ${formatDate(start)} 〜 ${formatDate(end)}`;
 }
+// 画面幅が変わったら週ラベルの表記も切り替える（回転・リサイズ対応）
+window.addEventListener('resize', renderWeekLabel);
 
 // makeCellで各 .magnet-list に作る Sortable インスタンスの保持先。
 // renderGrid は innerHTML='' でDOMを消すだけで Sortable は破棄されず、
@@ -3727,12 +3906,13 @@ function renderListTable() {
         const allRestDay = assigned.length > 0 && names.every(s => /休み/.test(s));
         const allRest = !allRestDay && assigned.length > 0 && names.every(s => /休み|研修/.test(s));
         const restCls = allRestDay ? ' rest-day-only' : (allRest ? ' rest-only' : '');
+        const unassignedCls = assigned.length === 0 ? ' unassigned' : '';
         const titleAttr = assigned.length > 1 ? ` title="複数配置: ${escapeAttr(names.join(', '))}"` : '';
         const selectedId = assigned.length > 0 ? assigned[0].id : '';
         const options = ['<option value="">（未配置）</option>'].concat(
           state.sites.map(s => `<option value="${escapeAttr(s.id)}"${s.id === selectedId ? ' selected' : ''}>${escapeHtml(s.name)}</option>`)
         ).join('');
-        html += `<td class="${conflictCls}${restCls}"${titleAttr}>` +
+        html += `<td class="${conflictCls}${restCls}${unassignedCls}"${titleAttr}>` +
           `<select class="list-site-select" data-person="${escapeAttr(name)}" data-date="${escapeAttr(date)}">${options}</select>` +
           `<div class="cell-memo" contenteditable="true" data-memokey="${escapeAttr(memoKey)}">${escapeHtml(memo)}</div></td>`;
       });
@@ -4327,6 +4507,7 @@ function updateDbxUI() {
     if (pullBtn) pullBtn.style.display = 'none';
     if (info) info.textContent = '';
   }
+  syncMenuBadge();
 }
 
 function setDbxStatus(state, text) {
@@ -4337,6 +4518,7 @@ function setDbxStatus(state, text) {
   else if (state === 'error') s.classList.add('error');
   else if (state === 'connected') s.classList.add('connected');
   t.textContent = text;
+  syncMenuBadge();
 }
 
 // PKCE helpers
