@@ -881,11 +881,13 @@
     inset: 0;
     background: rgba(0,0,0,0.5);
     display: none;
-    align-items: center;
-    justify-content: center;
+    overflow-y: auto;      /* 画面より高いモーダルはスクロールして全体に届く（上端が切れない） */
+    padding: 12px 0;
     z-index: 100;
   }
   .modal-bg.show { display: flex; }
+  /* 収まる時は中央寄せ、はみ出す時は上端から配置（margin:auto はスクロールで上端に届く） */
+  .modal-bg > * { margin: auto; }
   .modal {
     background: white;
     border-radius: 8px;
@@ -1520,6 +1522,7 @@
     .toolbar button { padding: 7px 9px; font-size: 13px; }
     .pc-only { display: none !important; }     /* PC専用ボタン群はスマホでは隠し、︙メニューに集約 */
     .menu-wrap { display: inline-flex; }        /* スマホでは「︙」メニューを表示 */
+    .settings-modal .modal { min-width: 0; }    /* 420px固定をやめて設定モーダルをスマホ幅に収める */
     .week-jump { display: none; }              /* ◀◀ ▶▶ は隠す（◀ 今週 ▶ は残す） */
     .btn-lbl { display: none; }                /* 「戻る」「モード」を隠しアイコン/短縮表示に */
     #week-label { font-size: 12px; margin: 0 4px; white-space: nowrap; }
