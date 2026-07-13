@@ -1523,6 +1523,10 @@
     #edit-btn { padding: 7px 10px; }
     .toolbar .menu-btn { font-size: 20px; padding: 6px 9px; min-width: 38px; }
     .app-menu { min-width: 210px; }
+    /* マグネット置き場（人員/重機/車両）は閲覧時は隠し、盤面を全幅に。
+       配置をいじる編集モードのときだけ表示する */
+    body:not(.edit-mode) .pool { display: none; }
+    body.edit-mode .pool { width: 140px; }
   }
 
   /* ===== Print / PDF ===== */
