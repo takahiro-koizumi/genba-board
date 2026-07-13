@@ -69,8 +69,11 @@
     border-color: #ffd93d;
   }
 
-  /* ===== ツールバー右の「︙」メニュー ===== */
-  .menu-wrap { position: relative; display: inline-flex; }
+  /* ===== ツールバー右の「︙」メニュー（スマホ専用） ===== */
+  .menu-wrap { position: relative; display: none; }   /* PCでは非表示。スマホのみ表示 */
+  /* PCでは絞り込みチップは出さない（フィルタボタンが常時見えているため）。
+     max-width:640px の論理補集合にして端数幅(640〜641px)の隙間をなくす */
+  @media not all and (max-width: 640px) { #active-filter-chip { display: none !important; } }
   .toolbar .menu-btn {
     position: relative;
     font-size: 20px;
@@ -146,18 +149,16 @@
     white-space: nowrap;
   }
   .app-menu .filter-group button.active { background: #2b3a4a; color: #fff; font-weight: bold; }
-  .menu-status-row {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    flex-wrap: wrap;
-    padding: 6px 8px 2px;
+  /* メニュー最下部の状態行（スマホ用：同期状態テキスト＋最終更新者を表示） */
+  .menu-status-line {
+    font-size: 12px;
+    color: #666;
+    padding: 8px 10px;
+    line-height: 1.4;
+    cursor: pointer;
+    word-break: break-word;
   }
-  .app-menu .dbx-status { color: #333; background: #f0f0ea; border-color: #ddd; }
-  .app-menu .dbx-status.connected { color: #fff; background: #16a34a; }
-  .app-menu .dbx-status.syncing   { color: #fff; background: #2563eb; }
-  .app-menu .dbx-status.error     { color: #fff; background: #dc2626; }
-  .app-menu .last-editor { color: #555; }
+  .menu-status-line:active { background: #eef1f4; }
   /* 絞り込み中チップ（フィルタが「全体」以外のとき表示） */
   .active-filter-chip {
     display: inline-flex;
@@ -1517,6 +1518,8 @@
   @media (max-width: 640px) {
     .toolbar { gap: 4px; padding: 6px 8px; }
     .toolbar button { padding: 7px 9px; font-size: 13px; }
+    .pc-only { display: none !important; }     /* PC専用ボタン群はスマホでは隠し、︙メニューに集約 */
+    .menu-wrap { display: inline-flex; }        /* スマホでは「︙」メニューを表示 */
     .week-jump { display: none; }              /* ◀◀ ▶▶ は隠す（◀ 今週 ▶ は残す） */
     .btn-lbl { display: none; }                /* 「戻る」「モード」を隠しアイコン/短縮表示に */
     #week-label { font-size: 12px; margin: 0 4px; white-space: nowrap; }
@@ -1602,14 +1605,37 @@
     <button class="week-jump" onclick="nextWeek()" title="次週 (+7日)">▶▶</button>
     <span id="week-label" style="margin: 0 8px; font-weight: bold;"></span>
     <span id="active-filter-chip" class="active-filter-chip" onclick="setViewFilter('all')" style="display:none" title="タップで全体表示に戻す"></span>
+    <!-- PC専用: 表示フィルタ・一覧・月別（従来どおりバーに直接表示。スマホでは非表示） -->
+    <div class="filter-group pc-only" id="filter-group">
+      <button data-filter="all" class="active" onclick="setViewFilter('all')">全体</button>
+      <button data-filter="jp" onclick="setViewFilter('jp')">日本人</button>
+      <button data-filter="trainee" onclick="setViewFilter('trainee')">実習生</button>
+      <button data-filter="tokutei" onclick="setViewFilter('tokutei')">特定技能</button>
+      <button data-filter="vehicle" onclick="setViewFilter('vehicle')">車両</button>
+    </div>
+    <button class="pc-only" onclick="openListView()">📋 一覧</button>
+    <button class="pc-only" onclick="openMonthSummary()">📊 月別</button>
     <div class="spacer"></div>
     <button id="undo-btn" onclick="undo()" title="元に戻す" disabled>↩<span class="btn-lbl"> 戻る</span></button>
     <button id="edit-btn" class="primary" onclick="toggleEditMode()">編集<span class="btn-lbl">モード</span></button>
+    <!-- PC専用: 現場追加・出力・データ・接続状態・その他（従来どおりバーに直接表示。スマホでは非表示） -->
+    <button class="pc-only" onclick="addSite()">＋現場</button>
+    <button class="pc-only" onclick="exportPDF()">📄 PDF出力</button>
+    <button class="pc-only" onclick="exportData()" title="JSONバックアップ">💾</button>
+    <button class="pc-only" onclick="importData()" title="JSONから復元">↓</button>
+    <span id="dbx-status" class="dbx-status pc-only" onclick="openSettings()" title="クリックで設定">
+      <span class="dot"></span><span id="dbx-status-text">未接続</span>
+    </span>
+    <span id="last-editor-label" class="last-editor pc-only" onclick="openHistory()" title="編集履歴を見る" style="display:none"></span>
+    <button class="pc-only" onclick="openHistory()" title="編集履歴（いつ・どの端末が編集したか）">🕘 履歴</button>
+    <button class="pc-only" onclick="openHelp()" title="使い方・ヘルプ">❓ ヘルプ</button>
+    <button class="pc-only" onclick="openSettings()" title="設定">⚙</button>
+    <!-- スマホ専用: 「︙」メニュー（PCでは非表示） -->
     <div class="menu-wrap">
       <button id="menu-btn" class="menu-btn" onclick="toggleMenu(event)" title="メニュー" aria-haspopup="true" aria-expanded="false"><span class="st-dot"></span><span class="menu-ico">︙</span></button>
       <div id="app-menu" class="app-menu" style="display:none" role="menu">
         <div class="menu-section-label">表示切替</div>
-        <div class="filter-group" id="filter-group">
+        <div class="filter-group">
           <button data-filter="all" class="active" onclick="setViewFilter('all'); closeMenu()">全体</button>
           <button data-filter="jp" onclick="setViewFilter('jp'); closeMenu()">日本人</button>
           <button data-filter="trainee" onclick="setViewFilter('trainee'); closeMenu()">実習生</button>
@@ -1632,12 +1658,7 @@
         <button class="menu-item" onclick="openHelp(); closeMenu()"><span class="mi-ico">❓</span>使い方・ヘルプ</button>
         <button class="menu-item" onclick="openSettings(); closeMenu()"><span class="mi-ico">⚙</span>設定</button>
         <div class="menu-divider"></div>
-        <div class="menu-status-row">
-          <span id="dbx-status" class="dbx-status" onclick="openSettings(); closeMenu()" title="クリックで設定">
-            <span class="dot"></span><span id="dbx-status-text">未接続</span>
-          </span>
-          <span id="last-editor-label" class="last-editor" onclick="openHistory(); closeMenu()" title="編集履歴を見る" style="display:none"></span>
-        </div>
+        <div class="menu-status-line" id="menu-status-line" onclick="openSettings(); closeMenu()" title="タップで設定（Dropbox接続）を開く">未接続</div>
       </div>
     </div>
   </div>
@@ -2512,6 +2533,23 @@ function syncMenuBadge() {
   if (s.classList.contains('syncing')) btn.classList.add('st-syncing');
   else if (s.classList.contains('error')) btn.classList.add('st-error');
   else if (s.classList.contains('connected')) btn.classList.add('st-connected');
+  updateMenuStatusLine();
+}
+
+// スマホの「︙」メニュー最下部に、同期状態テキスト＋最終更新者を表示する。
+// PC側の #dbx-status / #last-editor-label は pc-only でスマホ非表示のため、
+// ID重複を避けつつ同じ情報をメニュー内(#menu-status-line)へミラーする。
+function updateMenuStatusLine() {
+  const line = document.getElementById('menu-status-line');
+  if (!line) return;
+  const st = document.getElementById('dbx-status-text');
+  const conn = st ? st.textContent.trim() : '';
+  let editor = '';
+  if (typeof state !== 'undefined' && state && state._lastEditor) {
+    const t = fmtEditTime(state._lastEditAt);
+    editor = '最終更新: ' + state._lastEditor + (t ? ' ' + t : '');
+  }
+  line.textContent = [conn, editor].filter(Boolean).join('　/　') || '未接続';
 }
 
 function renderWeekLabel() {
@@ -4407,6 +4445,7 @@ function updateLastEditorLabel() {
     el.textContent = '';
     el.style.display = 'none';
   }
+  updateMenuStatusLine();  // スマホの︙メニュー内 状態行にも最終更新を反映
 }
 
 // ========== 編集履歴（いつ・どの端末が編集したか。board.json に相乗りして全社共有）==========
