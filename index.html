@@ -2051,6 +2051,7 @@
         <li>プルダウンで現場を変えると、その日の他の現場からは自動で外れます。</li>
         <li>右端に、その週の「稼働日数」が表示されます。</li>
       </ul>
+      <div class="help-note"><strong>備考欄の重機・車両：</strong>ボード右端の「備考」列に置いた重機・車両は、その現場に<strong>その週7日とも配置されている</strong>ものとして一覧に出ます（稼働日数にも入ります）。常駐している機械を備考に置いておけば、一覧から漏れません。人員は対象外です。</div>
 
       <h3 id="help-11">11. 月別集計を見る</h3>
       <p><span class="hk">📊 月別</span> で、ひと月の人数を現場ごとに集計します。</p>
@@ -3972,11 +3973,16 @@ function renderListTable() {
 
     let emitted = 0;
     labels.forEach(name => {
+      const placedAt = (siteId, dateStr) => {
+        const cell = state.schedule[siteId] && state.schedule[siteId][dateStr];
+        return !!(cell && cell.magnets && cell.magnets.some(m => m.type === listSection && m.label === name));
+      };
+      // 備考(__note__)欄の重機・車両は、その現場に週7日とも配置されているものとして扱う
+      const noteSiteIds = new Set(state.sites.filter(s => placedAt(s.id, '__note__')).map(s => s.id));
       const sitesPerDay = days.map(date => {
         const sites = [];
         state.sites.forEach(site => {
-          const cell = state.schedule[site.id] && state.schedule[site.id][date];
-          if (cell && cell.magnets && cell.magnets.some(m => m.type === listSection && m.label === name)) {
+          if (placedAt(site.id, date) || noteSiteIds.has(site.id)) {
             sites.push(site.name);
           }
         });
