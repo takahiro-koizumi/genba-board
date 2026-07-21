@@ -577,6 +577,29 @@
   .history-item .h-dev { font-weight: 600; color: #333; }
   .history-item .h-count { margin-left: auto; font-size: 11px; color: #999; white-space: nowrap; }
   .history-empty { color: #999; font-size: 13px; padding: 14px 2px; }
+  /* 完了現場（非表示にした現場）モーダル */
+  .archived-list { max-height: 55vh; overflow-y: auto; margin-top: 6px; }
+  .archived-item {
+    display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+    padding: 7px 4px; border-bottom: 1px solid #f2f2f2; font-size: 13px;
+  }
+  .archived-item .a-name { font-weight: 600; color: #333; }
+  .archived-item .a-meta { font-size: 11px; color: #999; }
+  .archived-item .a-spacer { flex: 1; }
+  .archived-item button {
+    padding: 4px 10px; border: 1px solid #ccc; background: #fff;
+    border-radius: 4px; cursor: pointer; font-size: 12px; white-space: nowrap;
+  }
+  .archived-item button.primary { background: #2563eb; color: #fff; border-color: #2563eb; }
+  .archived-item button.danger { color: #dc2626; border-color: #f0b4b4; }
+  .archived-empty { color: #999; font-size: 13px; padding: 14px 2px; line-height: 1.6; }
+  /* 現場設定モーダル内の「完了にする」行 */
+  .site-archive-row { margin: 10px 0; padding: 8px 0; border-top: 1px solid #eee; }
+  .site-archive-row button {
+    padding: 7px 12px; border: 1px solid #ccc; background: #fff;
+    border-radius: 4px; cursor: pointer; font-size: 13px;
+  }
+  .site-archive-row .hint { display: block; font-size: 11px; color: #999; margin-top: 5px; line-height: 1.5; }
   .settings-modal .modal { min-width: 420px; max-width: 90vw; }
   .settings-section {
     padding: 12px 0;
@@ -1623,6 +1646,8 @@
     <button id="edit-btn" class="primary" onclick="toggleEditMode()">編集<span class="btn-lbl">モード</span></button>
     <!-- PC専用: 現場追加・出力・データ・接続状態・その他（従来どおりバーに直接表示。スマホでは非表示） -->
     <button class="pc-only" onclick="addSite()">＋現場</button>
+    <!-- 完了現場が1つ以上あるときだけ出す（updateArchivedUI） -->
+    <button class="pc-only" id="archived-btn" onclick="openArchived()" title="完了にして非表示にした現場の確認・復帰" style="display:none">✅ 完了現場</button>
     <button class="pc-only" onclick="exportPDF()">📄 PDF出力</button>
     <button class="pc-only" onclick="exportData()" title="JSONバックアップ">💾</button>
     <button class="pc-only" onclick="importData()" title="JSONから復元">↓</button>
@@ -1650,6 +1675,7 @@
         <div class="menu-divider"></div>
         <div class="menu-section-label">編集</div>
         <button class="menu-item" onclick="addSite(); closeMenu()"><span class="mi-ico">＋</span>現場を追加</button>
+        <button class="menu-item" onclick="openArchived(); closeMenu()"><span class="mi-ico">✅</span>完了現場<span id="archived-menu-count" style="color:#999; margin-left:4px;"></span></button>
         <div class="menu-divider"></div>
         <div class="menu-section-label">出力・データ</div>
         <button class="menu-item" onclick="exportPDF(); closeMenu()"><span class="mi-ico">📄</span>PDF出力</button>
@@ -1721,6 +1747,11 @@
         <button data-affil="other" onclick="setPersonAffiliation('other')">その他</button>
       </div>
       <input type="text" id="affil-memo" class="affil-memo-input" placeholder="メモ（任意）：資格・備考など" />
+    </div>
+    <!-- 現場のみ：完了（盤面から非表示）／復帰 -->
+    <div id="site-archive-row" class="site-archive-row" style="display:none">
+      <button id="site-archive-btn" onclick="toggleSiteArchive()"></button>
+      <span class="hint" id="site-archive-hint"></span>
     </div>
     <div style="font-size:12px; color:#666; margin-bottom:6px;">色を選択：</div>
     <div id="color-grid" class="color-grid"></div>
@@ -1858,6 +1889,23 @@
     <div class="settings-section" style="border-bottom:none;">
       <p style="font-size:12px; color:#666;">いつ・どの端末（PC/iPad）が盤面を編集したかの記録です。同じ端末の連続した編集は1件にまとめています。<br>最新200件を自動で保持し、古い記録は自動的に消えます。</p>
       <div id="history-list" class="history-list"></div>
+    </div>
+  </div>
+</div>
+
+<div id="archived-modal" class="modal-bg settings-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <h2>完了現場</h2>
+      <button class="close-btn" onclick="closeArchived()">×</button>
+    </div>
+    <div class="settings-section" style="border-bottom:none;">
+      <p style="font-size:12px; color:#666;">終わった現場を「完了」にすると、盤面（表）から非表示になります。<br>
+        配置データは消えていないので、<strong>月別集計にはこれまでどおり出ます</strong>。「盤面に戻す」でいつでも復帰できます。</p>
+      <div id="archived-list" class="archived-list"></div>
+    </div>
+    <div class="modal-actions">
+      <button onclick="closeArchived()">閉じる</button>
     </div>
   </div>
 </div>
@@ -2006,9 +2054,12 @@
       <ul>
         <li><strong>追加</strong>：<span class="hk">＋現場</span> を押し、現場名 → 期間（任意）を入力します。</li>
         <li><strong>名前・色を変える</strong>：<span class="hk">編集モード</span>（7章）をONにして現場名をタップすると、設定画面で名前と色をまとめて変更できます。</li>
+        <li><strong>終わった現場を隠す（完了）</strong>：<span class="hk">編集モード</span>で現場名をタップ →「<span class="hk">✅ この現場を完了にする</span>」。盤面から消えて表がすっきりします。</li>
+        <li><strong>完了した現場を戻す</strong>：ツールバーの <span class="hk">✅ 完了現場</span>（スマホは <span class="hk">︙</span> メニュー →「完了現場」）を開き、「↩ 盤面に戻す」を押します。</li>
         <li><strong>削除</strong>：<span class="hk">編集モード</span>をONにして、現場名の右の赤い <strong>×</strong> を押します（配置データも消えます）。</li>
         <li><strong>並べ替え</strong>：<span class="hk">編集モード</span>で、現場名の左の <span class="hk">⋮⋮</span> を上下にドラッグします。</li>
       </ul>
+      <div class="help-note"><strong>「完了」と「削除」の違い</strong>：完了は<strong>隠すだけ</strong>で配置データは残り、<strong>月別集計にはこれまでどおり出ます</strong>（過去の実績として必要なため）。いつでも盤面に戻せます。削除はデータごと消えて元に戻せません。<strong>終わった現場は「完了」を使ってください。</strong></div>
 
       <h3 id="help-7">7. 閲覧モードと編集モード</h3>
       <p>このアプリには「閲覧モード」と「編集モード」があります。ツールバーの <span class="hk">編集モード</span> ボタンで切り替えます（ボタンが色付きのときが編集モードON）。</p>
@@ -2478,6 +2529,7 @@ function render() {
   applyFilterClass();
   updateFilterButtons();
   updateLastEditorLabel();
+  updateArchivedUI();
 }
 
 function applyFilterClass() {
@@ -2580,6 +2632,9 @@ function renderGrid() {
   cellSortables = [];
   grid.innerHTML = '';
 
+  // 完了(archived)にした現場は盤面に出さない。データは state に残る（月別集計には出る）
+  const visibleSites = state.sites.filter(s => !s.archived);
+
   // Header row
   const headSite = document.createElement('div');
   headSite.className = 'head site-head';
@@ -2591,7 +2646,7 @@ function renderGrid() {
     const dow = dayOfWeek(dateStr);
     const bgCls = dateBgClass(dateStr);
     let dayTotal = 0;
-    state.sites.forEach(s => {
+    visibleSites.forEach(s => {
       const c = state.schedule[s.id] && state.schedule[s.id][dateStr];
       if (c && c.magnets) dayTotal += c.magnets.filter(m => m.type === 'person').length;
     });
@@ -2612,7 +2667,7 @@ function renderGrid() {
   grid.appendChild(headNote);
 
   // Body rows
-  state.sites.forEach((site, rowIdx) => {
+  visibleSites.forEach((site, rowIdx) => {
     const rowCls = `row-${rowIdx % 2}`;
 
     const row = document.createElement('div');
@@ -2718,9 +2773,13 @@ function renderGrid() {
     scrollSpeed: 16,
     bubbleScroll: true,
     onUpdate: () => {
+      // 完了現場は盤面に無いので、表示中の行だけ並べ替え、完了現場は元の絶対位置に残す
+      // （月別集計の並べ替え setupMonthSortable と同じ考え方）
       const ids = Array.from(grid.querySelectorAll('.site-row')).map(r => r.dataset.siteId);
       const idMap = Object.fromEntries(state.sites.map(s => [s.id, s]));
-      state.sites = ids.map(id => idMap[id]).filter(Boolean);
+      const visible = new Set(ids);
+      let vi = 0;
+      state.sites = state.sites.map(s => visible.has(s.id) ? (idMap[ids[vi++]] || s) : s);
       saveState();
       render();
     },
@@ -3010,6 +3069,7 @@ function updateHeadcounts() {
     const dateStr = addDays(state.weekStart, i);
     let total = 0;
     state.sites.forEach(s => {
+      if (s.archived) return;   // 完了現場は盤面に出ていないので日計にも入れない
       const c = state.schedule[s.id] && state.schedule[s.id][dateStr];
       if (c && c.magnets) total += c.magnets.filter(m => m.type === 'person').length;
     });
@@ -3119,6 +3179,112 @@ function deleteSite(id) {
   delete state.schedule[id];
   saveState();
   render();
+  renderArchived();
+}
+
+// ========== 完了現場（アーカイブ） ==========
+// 終わった現場は site.archived = true で盤面から非表示にする。
+// 配置データ(state.schedule)は消さないので、月別集計には従来どおり出る。
+// 週間一覧(📋)の現場選択肢からは外す（今週の配置先としては選べない）。
+function archivedSiteList() { return state.sites.filter(s => s.archived); }
+
+// 表示中の週に残っているマグネット数（完了にする前の注意喚起用）
+function countWeekMagnets(siteId) {
+  let n = 0;
+  for (let i = 0; i < 7; i++) {
+    const c = state.schedule[siteId] && state.schedule[siteId][addDays(state.weekStart, i)];
+    if (c && c.magnets) n += c.magnets.length;
+  }
+  return n;
+}
+
+function archiveSite(id) {
+  const site = state.sites.find(s => s.id === id);
+  if (!site) return;
+  const n = countWeekMagnets(id);
+  const warn = n > 0 ? `\n※表示中の週にまだ${n}個のマグネットが置かれています（消えません）。` : '';
+  if (!confirm(`現場「${site.name}」を完了にして、盤面から非表示にしますか？${warn}\n\n配置データは残り、月別集計にも出ます。\n「✅ 完了現場」からいつでも盤面に戻せます。`)) return;
+  site.archived = true;
+  site.archivedAt = Date.now();
+  saveState();
+  render();
+  renderArchived();
+}
+
+function unarchiveSite(id) {
+  const site = state.sites.find(s => s.id === id);
+  if (!site) return;
+  delete site.archived;
+  delete site.archivedAt;
+  saveState();
+  render();
+  renderArchived();
+}
+
+// 現場設定モーダル（現場名タップ）内の「完了にする／盤面に戻す」ボタン
+function toggleSiteArchive() {
+  if (!colorPickerTarget || colorPickerTarget.type !== 'site') return;
+  const id = colorPickerTarget.label;
+  const site = state.sites.find(s => s.id === id);
+  if (!site) return;
+  const wasArchived = !!site.archived;
+  closeColorPicker();
+  if (wasArchived) unarchiveSite(id);
+  else archiveSite(id);
+}
+
+function openArchived() {
+  renderArchived();
+  document.getElementById('archived-modal').classList.add('show');
+}
+function closeArchived() {
+  document.getElementById('archived-modal').classList.remove('show');
+}
+function renderArchived() {
+  const el = document.getElementById('archived-list');
+  if (!el) return;
+  const list = archivedSiteList();
+  if (!list.length) {
+    el.innerHTML = '<div class="archived-empty">完了にした現場はありません。<br>' +
+      '<strong>編集モード</strong>で現場名をタップ →「✅ この現場を完了にする」で盤面から隠せます。</div>';
+    return;
+  }
+  // 閲覧モードは完全読み取り専用（盤面を変えない）ため、復帰・削除は編集モード中のみ
+  const note = editMode ? '' :
+    '<div class="archived-empty" style="padding:0 2px 10px;">※ 盤面に戻す・削除するには、ツールバーの「編集モード」をONにしてください。</div>';
+  el.innerHTML = note + list.map(s => {
+    const d = s.archivedAt ? new Date(s.archivedAt) : null;
+    const when = d ? `${d.getFullYear()}/${d.getMonth()+1}/${d.getDate()} 完了` : '';
+    const meta = [s.period ? `工期 ${escapeHtml(s.period)}` : '', when].filter(Boolean).join('　/　');
+    const actions = editMode
+      ? `<button class="primary" onclick="unarchiveSite('${escapeAttr(s.id)}')">↩ 盤面に戻す</button>
+      <button class="danger" onclick="deleteSite('${escapeAttr(s.id)}')">削除</button>`
+      : '';
+    return `<div class="archived-item">
+      <span class="a-name">${escapeHtml(s.name)}</span>
+      <span class="a-meta">${meta}</span>
+      <span class="a-spacer"></span>
+      ${actions}
+    </div>`;
+  }).join('');
+}
+document.getElementById('archived-modal').addEventListener('click', (e) => {
+  if (e.target.id === 'archived-modal') closeArchived();
+});
+
+// 完了現場の件数をツールバー(PC)と︙メニュー(スマホ)に反映
+function updateArchivedUI() {
+  const n = archivedSiteList().length;
+  const btn = document.getElementById('archived-btn');
+  if (btn) {
+    btn.style.display = n > 0 ? '' : 'none';   // 0件のときはPCツールバーに出さない
+    btn.textContent = `✅ 完了現場 ${n}`;
+  }
+  const cnt = document.getElementById('archived-menu-count');
+  if (cnt) cnt.textContent = n > 0 ? `（${n}）` : '';
+  // 完了現場モーダルを開いたまま編集モードを切り替えた場合に、操作ボタンの出し分けを追従させる
+  const modal = document.getElementById('archived-modal');
+  if (modal && modal.classList.contains('show')) renderArchived();
 }
 
 function toggleEditMode() {
@@ -3618,6 +3784,21 @@ function openColorPicker(type, label) {
     affilWrap.style.display = 'none';
   }
 
+  // 完了（アーカイブ）ボタン ─ 現場のみ表示
+  const archRow = document.getElementById('site-archive-row');
+  if (type === 'site') {
+    const site = state.sites.find(s => s.id === label);
+    const isArch = !!(site && site.archived);
+    archRow.style.display = '';
+    document.getElementById('site-archive-btn').textContent =
+      isArch ? '↩ 盤面に戻す（完了を解除）' : '✅ この現場を完了にする';
+    document.getElementById('site-archive-hint').textContent = isArch
+      ? '完了を解除して、盤面に再び表示します。'
+      : '盤面（表）から非表示になります。配置データは消えず、月別集計にも出ます。「✅ 完了現場」からいつでも戻せます。';
+  } else {
+    archRow.style.display = 'none';
+  }
+
   const grid = document.getElementById('color-grid');
   grid.innerHTML = '';
   COLOR_PRESETS.forEach(c => {
@@ -3906,6 +4087,9 @@ function renderListTable() {
   const days = [];
   for (let i = 0; i < 7; i++) days.push(addDays(state.weekStart, i));
 
+  // 完了現場は今週の配置対象ではないので一覧・現場選択肢から外す（データ自体は残っている）
+  const listSites = state.sites.filter(s => !s.archived);
+
   const headLabel = listSection === 'person' ? '氏名' :
                     listSection === 'equipment' ? '重機' : '車両';
   let html = `<thead><tr><th class="name-col">${headLabel}</th>`;
@@ -3938,7 +4122,7 @@ function renderListTable() {
       let workDays = 0;
       days.forEach(date => {
         const assigned = [];
-        state.sites.forEach(site => {
+        listSites.forEach(site => {
           const cell = state.schedule[site.id] && state.schedule[site.id][date];
           if (cell && cell.magnets && cell.magnets.some(m => m.type === 'person' && m.label === name)) {
             assigned.push(site);
@@ -3956,7 +4140,7 @@ function renderListTable() {
         const titleAttr = assigned.length > 1 ? ` title="複数配置: ${escapeAttr(names.join(', '))}"` : '';
         const selectedId = assigned.length > 0 ? assigned[0].id : '';
         const options = ['<option value="">（未配置）</option>'].concat(
-          state.sites.map(s => `<option value="${escapeAttr(s.id)}"${s.id === selectedId ? ' selected' : ''}>${escapeHtml(s.name)}</option>`)
+          listSites.map(s => `<option value="${escapeAttr(s.id)}"${s.id === selectedId ? ' selected' : ''}>${escapeHtml(s.name)}</option>`)
         ).join('');
         html += `<td class="${conflictCls}${restCls}${unassignedCls}"${titleAttr}>` +
           `<select class="list-site-select" data-person="${escapeAttr(name)}" data-date="${escapeAttr(date)}">${options}</select>` +
@@ -3977,10 +4161,10 @@ function renderListTable() {
         return !!(cell && cell.magnets && cell.magnets.some(m => m.type === listSection && m.label === name));
       };
       // 備考(__note__)欄の重機・車両は、その現場に週7日とも配置されているものとして扱う
-      const noteSiteIds = new Set(state.sites.filter(s => placedAt(s.id, '__note__')).map(s => s.id));
+      const noteSiteIds = new Set(listSites.filter(s => placedAt(s.id, '__note__')).map(s => s.id));
       const sitesPerDay = days.map(date => {
         const sites = [];
-        state.sites.forEach(site => {
+        listSites.forEach(site => {
           if (placedAt(site.id, date) || noteSiteIds.has(site.id)) {
             sites.push(site.name);
           }
@@ -4130,8 +4314,12 @@ function renderMonthSummary() {
     const cls = n => 'num' + (n === 0 ? ' zero' : '');
     const isRest = /休み|研修/.test(s.name);
     const rowCls = 'month-row' + (isRest ? ' row-rest' : '');
+    // 完了現場も過去の実績として集計に出す（盤面には無いので「完了」と分かるようにする）
+    const archTag = s.archived
+      ? '<span style="font-size:10px;color:#94a3b8;border:1px solid #cbd5e1;border-radius:3px;padding:0 4px;margin-left:6px;">完了</span>'
+      : '';
     html += `<tr class="${rowCls}" data-site-id="${s.id}">
-      <td class="site-name-col"><span class="site-drag-handle" title="ドラッグして並び替え">⋮⋮</span>${escapeHtml(s.name)}</td>
+      <td class="site-name-col"><span class="site-drag-handle" title="ドラッグして並び替え">⋮⋮</span>${escapeHtml(s.name)}${archTag}</td>
       <td class="${cls(c.ohtahara||0)}">${c.ohtahara || 0}</td>
       <td class="${cls(c.gardenhomes||0)}">${c.gardenhomes || 0}</td>
       <td class="${cls(c.other||0)}">${c.other || 0}</td>
@@ -4293,7 +4481,7 @@ function executeCopyDragAction(type, srcKey, destKey) {
   if (type === 'day') {
     const srcD = new Date(srcKey), destD = new Date(destKey);
     if (!confirm(`${srcD.getMonth()+1}/${srcD.getDate()} のマグネットを ${destD.getMonth()+1}/${destD.getDate()} に上書きコピーしますか？\n※メモ欄はそのまま残ります（マグネットのみ）`)) return;
-    state.sites.forEach(site => {
+    state.sites.filter(s => !s.archived).forEach(site => {   // 完了現場（非表示）には書き込まない
       const srcCell = state.schedule[site.id] && state.schedule[site.id][srcKey];
       const srcMagnets = (srcCell && srcCell.magnets) ? srcCell.magnets : [];
       // マグネットのみ差し替え。コピー先のメモ欄（note・書式）は維持
@@ -4376,7 +4564,7 @@ function executeDayCopy() {
   if (dests.length === 0) { alert('コピー先を1つ以上選んでください'); return; }
   const mode = document.querySelector('input[name="copy-mode"]:checked').value;
 
-  state.sites.forEach(site => {
+  state.sites.filter(s => !s.archived).forEach(site => {   // 完了現場（非表示）には書き込まない
     const srcCell = state.schedule[site.id] && state.schedule[site.id][dayCopySource];
     const srcMagnets = (srcCell && srcCell.magnets) ? srcCell.magnets : [];
     dests.forEach(dest => {
