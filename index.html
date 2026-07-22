@@ -2102,11 +2102,12 @@
       <div class="help-note">コピー・移動は <span class="hk">編集モード</span>（7章）中だけ使えます。閲覧モードでは 📋 ボタンは表示されません。</div>
       <ul>
         <li><strong>1日分コピー</strong>：曜日見出しの 📋 を別の曜日へドラッグ。タップすると、複数の曜日にまとめてコピーする画面が開きます。</li>
-        <li><strong>現場1週間分コピー</strong>：現場名の 📋 を別の現場へドラッグします。</li>
+        <li><strong>現場1週間分コピー</strong>：現場名の 📋 を別の現場へドラッグします。<strong>いま表示している週の7日分だけ</strong>がコピーされます（前の週・次の週や、右端の「備考」欄は変わりません）。</li>
         <li><strong>1マスのコピー・移動</strong>：マス右上の 📋 を別のマスへドラッグします。<strong>同じ日の別の現場</strong>へドラッグすると「移動」（元のマスは空になります）、<strong>別の日</strong>へドラッグすると「コピー」になります。</li>
       </ul>
       <p>いずれも実行前に確認メッセージが出ます。</p>
-      <p style="color:#666;">※コピー・移動するのは<strong>マグネット（人員・車両）だけ</strong>です。各マスに記入したメモや「備考」欄の内容は<strong>そのまま残ります</strong>（消えません・上書きされません）。</p>
+      <p style="color:#666;">※コピー・移動するのは<strong>マグネット（人・重機・車両）だけ</strong>です。各マスに記入したメモや「備考」欄に書いた文字は<strong>そのまま残ります</strong>（消えません・上書きされません）。<br>
+        右端の「備考」欄に置いた重機・車両のマグネットも、1日分コピー・現場1週間分コピーでは変わりません。「備考」マスを狙って 📋 をドラッグしたときだけ入れ替わります。</p>
 
       <h3 id="help-9">9. メモ・工期を書く</h3>
       <ul>
@@ -4519,16 +4520,18 @@ function executeCopyDragAction(type, srcKey, destKey) {
     const srcSite = state.sites.find(s => s.id === srcKey);
     const destSite = state.sites.find(s => s.id === destKey);
     if (!srcSite || !destSite) return;
-    if (!confirm(`「${srcSite.name}」のマグネットを「${destSite.name}」に上書きコピーしますか？\n※メモ欄・備考はそのまま残ります（マグネットのみ）`)) return;
+    const weekLabel = `${formatDate(state.weekStart)}〜${formatDate(addDays(state.weekStart, 6))}`;
+    if (!confirm(`「${srcSite.name}」のマグネットを「${destSite.name}」に上書きコピーしますか？\n対象は表示中の週（${weekLabel}）の7日分だけです。\n※メモ欄・備考欄はそのまま残ります（マグネットのみ）`)) return;
     const srcSched = state.schedule[srcKey] || {};
-    const destSched = state.schedule[destKey] || {};
-    // コピー元・先の全日付を対象に、マグネットのみ差し替え（コピー先のメモ欄・備考は維持）
-    const dates = new Set([...Object.keys(srcSched), ...Object.keys(destSched)]);
-    dates.forEach(date => {
+    // 対象は「表示中の週の7日分」だけ。以前はコピー元・先の全日付（過去の週や備考欄まで）を
+    // 上書きしており、コピー先の過去の実績（月別集計の人日）が無警告で消えていた。
+    // 画面ラベル「◯◯ の1週間配置」・ヘルプ「現場1週間分コピー」に実装を合わせる。備考(__note__)は対象外。
+    for (let i = 0; i < 7; i++) {
+      const date = addDays(state.weekStart, i);
       const srcCell = srcSched[date];
       const srcMagnets = (srcCell && srcCell.magnets) ? srcCell.magnets : [];
       getCellData(destKey, date).magnets = srcMagnets.map(m => ({...m, id: genId()}));
-    });
+    }
   } else if (type === 'cell') {
     const [srcSiteId, srcDate] = srcKey.split('|');
     const [destSiteId, destDate] = destKey.split('|');
