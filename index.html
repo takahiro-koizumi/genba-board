@@ -796,6 +796,8 @@
   .magnet[data-type="person"] { background: linear-gradient(180deg, #ff7373 0%, #e94747 100%); color: white; }
   .magnet[data-type="equipment"] { background: linear-gradient(180deg, #ffe25a 0%, #f5c518 100%); color: #222; }
   .magnet[data-type="vehicle"] { background: linear-gradient(180deg, #fff 0%, #e8e8e8 100%); color: #222; border: 1px solid #999; }
+  /* 協力業者（会社単位）は自社人員と一目で見分けられるよう青系 */
+  .magnet[data-type="person"][data-kind="partner"] { background: linear-gradient(180deg, #7db8e8 0%, #3f83c4 100%); color: white; }
   .magnet .del {
     display: inline-flex;
     align-items: center;
@@ -897,6 +899,11 @@
     color: #555;
   }
   .pool .add-btn:active { background: rgba(0,0,0,0.05); }
+  .pool .add-partner-btn {
+    margin-top: 6px;
+    border-color: #3f83c4;
+    color: #2f6ba3;
+  }
 
   /* ===== Modal ===== */
   .modal-bg {
@@ -1103,10 +1110,34 @@
     line-height: 1;
     flex-shrink: 0;
   }
+  /* ===== 協力業者（会社単位） ===== */
+  .magnet[data-kind="partner"] {
+    border-radius: 14px;
+    padding-left: 4px;
+  }
+  .magnet[data-kind="partner"]::before {
+    content: '協';
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0,0,0,0.3);
+    color: white;
+    font-size: 9px;
+    font-weight: bold;
+    padding: 0 3px;
+    height: 14px;
+    min-width: 14px;
+    border-radius: 50%;
+    margin-right: 4px;
+    line-height: 1;
+    flex-shrink: 0;
+  }
   body.filter-jp .magnet[data-kind="trainee"],
-  body.filter-jp .magnet[data-kind="tokutei"] { display: none !important; }
+  body.filter-jp .magnet[data-kind="tokutei"],
+  body.filter-jp .magnet[data-kind="partner"] { display: none !important; }
   body.filter-trainee .magnet[data-type="person"]:not([data-kind="trainee"]) { display: none !important; }
   body.filter-tokutei .magnet[data-type="person"]:not([data-kind="tokutei"]) { display: none !important; }
+  body.filter-partner .magnet[data-type="person"]:not([data-kind="partner"]) { display: none !important; }
   body.filter-vehicle .magnet[data-type="person"],
   body.filter-vehicle .magnet[data-type="equipment"] { display: none !important; }
   body.filter-vehicle .cell-headcount,
@@ -1147,18 +1178,20 @@
   }
   .kind-toggle button {
     flex: 1;
-    padding: 8px;
+    padding: 8px 4px;
     border: 0;
     background: transparent;
     border-radius: 4px;
     cursor: pointer;
-    font-size: 13px;
+    font-size: 12px;
+    white-space: nowrap;
   }
   .kind-toggle button.active {
     background: #2b3a4a;
     color: white;
     font-weight: bold;
   }
+  .kind-toggle button#kind-partner.active { background: #3f83c4; }
 
   /* ===== Affiliation toggle ===== */
   .affil-row {
@@ -1393,6 +1426,17 @@
     margin-right: 6px;
     line-height: 1.2;
   }
+  .list-table tr.row-partner td.name::before {
+    content: '協';
+    display: inline-block;
+    background: #3f83c4;
+    color: white;
+    font-size: 9px;
+    padding: 1px 4px;
+    border-radius: 8px;
+    margin-right: 6px;
+    line-height: 1.2;
+  }
   .list-table td.conflict { background: #ffe5e5; }
   .list-table td.unassigned { background: #ffec99; }
   .list-table .site-tag {
@@ -1599,7 +1643,9 @@
       -webkit-print-color-adjust: exact !important;
       print-color-adjust: exact !important;
     }
-    .magnet[data-kind="trainee"]::before {
+    .magnet[data-kind="trainee"]::before,
+    .magnet[data-kind="tokutei"]::before,
+    .magnet[data-kind="partner"]::before {
       font-size: 7px !important;
       height: 11px !important;
       min-width: 11px !important;
@@ -1637,6 +1683,7 @@
       <button data-filter="jp" onclick="setViewFilter('jp')">日本人</button>
       <button data-filter="trainee" onclick="setViewFilter('trainee')">実習生</button>
       <button data-filter="tokutei" onclick="setViewFilter('tokutei')">特定技能</button>
+      <button data-filter="partner" onclick="setViewFilter('partner')">協力業者</button>
       <button data-filter="vehicle" onclick="setViewFilter('vehicle')">車両</button>
     </div>
     <button class="pc-only" onclick="openListView()">📋 一覧</button>
@@ -1668,6 +1715,7 @@
           <button data-filter="jp" onclick="setViewFilter('jp'); closeMenu()">日本人</button>
           <button data-filter="trainee" onclick="setViewFilter('trainee'); closeMenu()">実習生</button>
           <button data-filter="tokutei" onclick="setViewFilter('tokutei'); closeMenu()">特定技能</button>
+          <button data-filter="partner" onclick="setViewFilter('partner'); closeMenu()">協力業者</button>
           <button data-filter="vehicle" onclick="setViewFilter('vehicle'); closeMenu()">車両</button>
         </div>
         <button class="menu-item" onclick="openListView(); closeMenu()"><span class="mi-ico">📋</span>一覧</button>
@@ -1705,6 +1753,7 @@
       <div class="pool-body">
         <div id="pool-items" class="pool-items"></div>
         <button class="add-btn" onclick="addPoolItem()">＋ マグネット追加</button>
+        <button class="add-btn add-partner-btn" id="add-partner-btn" onclick="addPartnerItem()" style="display:none">＋ 協力業者を追加</button>
       </div>
     </div>
   </div>
@@ -1737,6 +1786,7 @@
         <button id="kind-jp" onclick="setLabelKind('jp')">日本人</button>
         <button id="kind-trainee" onclick="setLabelKind('trainee')">実習生</button>
         <button id="kind-tokutei" onclick="setLabelKind('tokutei')">特定技能</button>
+        <button id="kind-partner" onclick="setLabelKind('partner')">協力業者</button>
       </div>
     </div>
     <div id="affil-wrap" class="affil-row" style="display:none">
@@ -1952,6 +2002,7 @@
         <button data-filter="jp" onclick="setViewFilter('jp', true)">日本人</button>
         <button data-filter="trainee" onclick="setViewFilter('trainee', true)">実習生</button>
         <button data-filter="tokutei" onclick="setViewFilter('tokutei', true)">特定技能</button>
+        <button data-filter="partner" onclick="setViewFilter('partner', true)">協力業者</button>
       </div>
       <input type="search" id="list-search" placeholder="名前で検索..." oninput="renderListTable()" />
       <button onclick="renderListTable()">更新</button>
@@ -2033,7 +2084,11 @@
       <ul>
         <li>プール上部の <span class="hk">人員</span> <span class="hk">重機</span> <span class="hk">車両</span> タブで切り替えます。</li>
         <li>新しいマグネットは <span class="hk">＋ マグネット追加</span> で作れます。</li>
+        <li>人員タブは <strong>日本人 / 特定技能 / 実習生 / 協力業者</strong> の見出しに分かれています。</li>
       </ul>
+      <div class="help-note"><strong>協力業者：</strong>人員タブの一番下が協力業者欄です。<span class="hk">＋ 協力業者を追加</span> で <strong>業者名（会社単位）</strong>のマグネットを作ります（例：○○建設）。青色＋「協」バッジで自社の人と見分けられます。<br>
+        会社単位なので、<strong>マスの人数・「計○人」・月別集計の人工には数えません</strong>（人数は自社の人だけを数えます）。同じ業者を同じ日に複数の現場へ置いても<strong>重複の確認メッセージは出ません</strong>。<br>
+        すでにあるマグネットを協力業者に変えるときは、マグネットをタップして「マグネット設定」の区分で <span class="hk">協力業者</span> を選びます。</div>
       <div class="help-note"><strong>重複の警告：</strong>同じ人・重機・車両を同じ日の別の現場にも置こうとすると、確認メッセージが出ます。<strong>備考欄</strong>でも、同じ重機・車両が別の現場と重複すると確認が出ます（人の名前は備考欄では確認しません）。意図しない二重配置を防ぐためです。<br>※「完了」にした現場（6章）は重複チェックの対象外です。完了現場に同じ人・重機がその日に残っていても、確認メッセージは出ず、一覧表の赤いマスにもなりません。</div>
       <div class="help-note"><strong>iPadの操作：</strong>マグネットをドラッグするときは、少し長押ししてから動かしてください（誤操作防止のためです）。</div>
 
@@ -2046,8 +2101,9 @@
 
       <h3 id="help-5">5. 表示をしぼり込む</h3>
       <ul>
-        <li><span class="hk">全体</span> <span class="hk">日本人</span> <span class="hk">実習生</span> <span class="hk">特定技能</span> <span class="hk">車両</span> のボタンで、表示する種類をしぼれます。</li>
+        <li><span class="hk">全体</span> <span class="hk">日本人</span> <span class="hk">実習生</span> <span class="hk">特定技能</span> <span class="hk">協力業者</span> <span class="hk">車両</span> のボタンで、表示する種類をしぼれます。</li>
         <li><span class="hk">車両</span> を選ぶと車両だけが表示されます。</li>
+        <li><span class="hk">協力業者</span> を選ぶと協力業者のマグネットだけが表示されます（<span class="hk">日本人</span> を選んだときは協力業者は隠れます）。</li>
         <li>選んだしぼり込みは、次にアプリを開いたときも保たれます。</li>
       </ul>
 
@@ -2127,11 +2183,13 @@
         <li>プルダウンで現場を変えると、その日は「完了」にした現場からも外れます（一覧には見えていませんが、データからも外れます）。</li>
       </ul>
       <div class="help-note"><strong>備考欄の重機・車両：</strong>ボード右端の「備考」列に置いた重機・車両は、その現場に<strong>その週7日とも配置されている</strong>ものとして一覧に出ます（稼働日数にも入ります）。常駐している機械を備考に置いておけば、一覧から漏れません。人員は対象外です。</div>
+      <div class="help-note"><strong>協力業者の行：</strong>人員表に「協」バッジ付きで出ます。会社単位なので<strong>プルダウンではなく現場名タグ</strong>で表示し、同じ日に複数の現場に入っていても<strong>赤いマス（重複）にはなりません</strong>。入っていない日は灰色の「—」で、黄色い未配置ハイライトも出ません。上部の <span class="hk">協力業者</span> ボタンで協力業者だけの表にできます。</div>
 
       <h3 id="help-11">11. 月別集計を見る</h3>
       <p><span class="hk">📊 月別</span> で、ひと月の人数を現場ごとに集計します。</p>
       <ul>
         <li>所属別（大田原工業／ガーデンホームズ／その他）に「人日（のべ人数）」で集計します。</li>
+        <li><strong>協力業者は集計に入りません</strong>（会社単位のマグネットで、人数ではないためです）。</li>
         <li><span class="hk">◀ 前月</span> <span class="hk">次月 ▶</span> で月を切り替えられます。</li>
         <li>現場名の左の <span class="hk">⋮⋮</span> で並べ替えできます（ボードの並び順にも反映されます）。</li>
         <li>「完了」にした現場（6章）も、その月に人が入っていれば <span class="hk">完了</span> の印付きで出ます。過去の人工を数えるためです。</li>
@@ -2143,7 +2201,7 @@
       <ul>
         <li>名前の変更（配置済みのものも一括で変わります）</li>
         <li>色の変更（パレットまたはカスタム色）</li>
-        <li>人員：「日本人／実習生／特定技能」の区分、「大田原工業／ガーデンホームズ／その他」の所属を切替</li>
+        <li>人員：「日本人／実習生／特定技能／協力業者」の区分、「大田原工業／ガーデンホームズ／その他」の所属を切替</li>
         <li>重機・車両：型式・メーカーなどの情報も表示されます</li>
       </ul>
 
@@ -2173,12 +2231,12 @@
 
       <h3 id="help-16">16. 色とマークの意味</h3>
       <ul>
-        <li><strong>青い数字（マス左上）</strong>：その日その現場の人数。曜日見出しの「計○人」はその日の合計です（「完了」にした現場の人数は入りません）。</li>
-        <li><strong>実 / 特 バッジ</strong>：マグネット左の黒丸。実＝実習生、特＝特定技能。</li>
+        <li><strong>青い数字（マス左上）</strong>：その日その現場の人数。曜日見出しの「計○人」はその日の合計です（「完了」にした現場の人数と、協力業者は入りません）。</li>
+        <li><strong>実 / 特 / 協 バッジ</strong>：マグネット左の黒丸。実＝実習生、特＝特定技能、協＝協力業者（青いマグネット・会社単位）。</li>
         <li><strong>右下の丸ドット</strong>：所属マーク。緑＝ガーデンホームズ、茶＝その他。</li>
         <li><strong>曜日の色</strong>：日曜＝赤、祝日＝青地に赤字、会社休＝青、健康診断＝緑。</li>
         <li><strong>黄色いマス（一覧表）</strong>：その日はどの現場にも配置されていない（未配置）という印です。重機・車両の表では「—」が黄色で出ます。</li>
-        <li><strong>赤いマス（一覧表）</strong>：同じ人が同じ日に複数の現場へ配置されている状態（重複）です。</li>
+        <li><strong>赤いマス（一覧表）</strong>：同じ人が同じ日に複数の現場へ配置されている状態（重複）です。協力業者は会社単位なので対象外です。</li>
         <li><strong>完了（月別集計）</strong>：その現場は「完了」にして盤面から隠してある、という印です（6章）。</li>
       </ul>
 
@@ -2565,6 +2623,7 @@ function applyFilterClass() {
   document.body.classList.toggle('filter-jp', state.viewFilter === 'jp');
   document.body.classList.toggle('filter-trainee', state.viewFilter === 'trainee');
   document.body.classList.toggle('filter-tokutei', state.viewFilter === 'tokutei');
+  document.body.classList.toggle('filter-partner', state.viewFilter === 'partner');
   document.body.classList.toggle('filter-vehicle', state.viewFilter === 'vehicle');
 }
 
@@ -2577,7 +2636,7 @@ function updateFilterButtons() {
   // フィルタが「全体」以外のとき、ツールバーに絞り込みチップを表示（メニュー内なので気づき用）
   const chip = document.getElementById('active-filter-chip');
   if (chip) {
-    const names = { jp: '日本人', trainee: '実習生', tokutei: '特定技能', vehicle: '車両' };
+    const names = { jp: '日本人', trainee: '実習生', tokutei: '特定技能', partner: '協力業者', vehicle: '車両' };
     if (state.viewFilter && state.viewFilter !== 'all' && names[state.viewFilter]) {
       chip.textContent = '絞込: ' + names[state.viewFilter] + ' ✕';
       chip.style.display = '';
@@ -2677,7 +2736,7 @@ function renderGrid() {
     let dayTotal = 0;
     visibleSites.forEach(s => {
       const c = state.schedule[s.id] && state.schedule[s.id][dateStr];
-      if (c && c.magnets) dayTotal += c.magnets.filter(m => m.type === 'person').length;
+      if (c && c.magnets) dayTotal += c.magnets.filter(countsAsHeadcount).length;
     });
     const totalHtml = dayTotal > 0 ? `<span class="day-total">計${dayTotal}人</span>` : '';
     const head = document.createElement('div');
@@ -2824,7 +2883,7 @@ function makeCell(siteId, dateStr, rowCls) {
 
   const data = getCellData(siteId, dateStr);
 
-  const personCount = (data.magnets || []).filter(m => m.type === 'person').length;
+  const personCount = (data.magnets || []).filter(countsAsHeadcount).length;
   if (personCount > 0) {
     const badge = document.createElement('div');
     badge.className = 'cell-headcount';
@@ -2955,14 +3014,20 @@ function renderPool() {
     items.forEach(label => pool.appendChild(makePoolMagnet(label)));
   }
 
+  // 「＋ 協力業者を追加」は人員タブの編集モードのみ
+  const partnerBtn = document.getElementById('add-partner-btn');
+  if (partnerBtn) partnerBtn.style.display = (activeTab === 'person') ? '' : 'none';
+
   if (activeTab === 'person') {
     const labels = state.labels.person || [];
     const jp = labels.filter(n => getPersonKind(n) === 'jp');
     const tk = labels.filter(n => getPersonKind(n) === 'tokutei');
     const tr = labels.filter(n => getPersonKind(n) === 'trainee');
+    const pt = labels.filter(n => getPersonKind(n) === 'partner');
     appendSection('日本人', jp);
     appendSection('特定技能', tk);
     appendSection('実習生', tr);
+    appendSection('協力業者', pt);
   } else {
     const labels = state.labels[activeTab] || [];
     labels.forEach(label => pool.appendChild(makePoolMagnet(label)));
@@ -3016,6 +3081,8 @@ function readCellFromDom(siteId, dateStr) {
 function findDuplicateOnDay(dateStr, type, label, excludeMagnetEl) {
   // 備考(__note__)列は重機・車両のみ重複チェック（人員はメモ用途があるため対象外）
   if (dateStr === '__note__' && type !== 'equipment' && type !== 'vehicle') return null;
+  // 協力業者は会社単位。同じ日に複数現場へ入るのが普通なので重複警告しない
+  if (type === 'person' && getPersonKind(label) === 'partner') return null;
   const lists = document.querySelectorAll(`.magnet-list[data-date="${dateStr}"]`);
   for (const list of lists) {
     const magnets = list.querySelectorAll('.magnet');
@@ -3081,7 +3148,7 @@ function updateHeadcounts() {
     const siteId = cell.dataset.siteId;
     const date = cell.dataset.date;
     const data = state.schedule[siteId] && state.schedule[siteId][date];
-    const count = data && data.magnets ? data.magnets.filter(m => m.type === 'person').length : 0;
+    const count = data && data.magnets ? data.magnets.filter(countsAsHeadcount).length : 0;
     let badge = cell.querySelector(':scope > .cell-headcount');
     if (count > 0) {
       if (!badge) {
@@ -3100,7 +3167,7 @@ function updateHeadcounts() {
     state.sites.forEach(s => {
       if (s.archived) return;   // 完了現場は盤面に出ていないので日計にも入れない
       const c = state.schedule[s.id] && state.schedule[s.id][dateStr];
-      if (c && c.magnets) total += c.magnets.filter(m => m.type === 'person').length;
+      if (c && c.magnets) total += c.magnets.filter(countsAsHeadcount).length;
     });
     const head = document.querySelector(`.head[data-date="${dateStr}"]`);
     if (!head) continue;
@@ -3181,6 +3248,23 @@ async function addPoolItem() {
   if (!label) return;
   state.labels[activeTab].push(label);
   saveState();
+  renderPool();
+}
+
+// 協力業者（会社単位）を人員プールに追加する。区分を partner にして専用セクションへ入れる。
+async function addPartnerItem() {
+  const label = await prompt2('協力業者を追加', '業者名（例: ○○建設）');
+  if (!label) return;
+  if (!state.labels.person) state.labels.person = [];
+  if (state.labels.person.includes(label)) {
+    alert(`「${label}」は既に人員プールにあります。`);
+    return;
+  }
+  state.labels.person.push(label);
+  if (!state.personKind) state.personKind = {};
+  state.personKind[label] = 'partner';
+  saveState();
+  activeTab = 'person';
   renderPool();
 }
 
@@ -3748,7 +3832,7 @@ function openColorPicker(type, label) {
     preview.style.border = '1px solid #999';
   } else {
     const defaults = {
-      person: { bg: 'linear-gradient(180deg, #ff7373 0%, #e94747 100%)', color: '#fff' },
+      person: { bg: personDefaultBg(getPersonKind(label)), color: '#fff' },
       vehicle: { bg: 'linear-gradient(180deg, #fff 0%, #e8e8e8 100%)', color: '#222' },
       site: { bg: '#f8f8f4', color: '#222' },
     };
@@ -3799,6 +3883,7 @@ function openColorPicker(type, label) {
     document.getElementById('kind-jp').classList.toggle('active', k === 'jp');
     document.getElementById('kind-trainee').classList.toggle('active', k === 'trainee');
     document.getElementById('kind-tokutei').classList.toggle('active', k === 'tokutei');
+    document.getElementById('kind-partner').classList.toggle('active', k === 'partner');
   } else {
     kindWrap.style.display = 'none';
   }
@@ -3947,6 +4032,19 @@ document.getElementById('color-modal').addEventListener('click', (e) => {
 // ========== Person kind ==========
 const KATAKANA_TRAINEES = ['デラ','トビ','トピ','アディ','ハリム'];
 
+// 人数カウント（マスの人数バッジ・日計・月別集計）の対象かどうか。
+// 協力業者は「会社単位」のマグネットなので1人として数えない。
+function countsAsHeadcount(m) {
+  return m.type === 'person' && getPersonKind(m.label) !== 'partner';
+}
+
+// 色未設定の人員マグネットの既定色（CSSの .magnet[data-type="person"] と揃える）
+function personDefaultBg(kind) {
+  return kind === 'partner'
+    ? 'linear-gradient(180deg, #7db8e8 0%, #3f83c4 100%)'
+    : 'linear-gradient(180deg, #ff7373 0%, #e94747 100%)';
+}
+
 function getPersonKind(name) {
   if (state.personKind && state.personKind[name]) return state.personKind[name];
   // Auto: 全てアルファベット大文字（DUY, TIEN等）は実習生として扱う
@@ -3965,8 +4063,16 @@ function setLabelKind(kind) {
   document.getElementById('kind-jp').classList.toggle('active', kind === 'jp');
   document.getElementById('kind-trainee').classList.toggle('active', kind === 'trainee');
   document.getElementById('kind-tokutei').classList.toggle('active', kind === 'tokutei');
+  document.getElementById('kind-partner').classList.toggle('active', kind === 'partner');
   const preview = document.querySelector('#color-target .preview-magnet');
-  if (preview) preview.dataset.kind = kind;
+  if (preview) {
+    preview.dataset.kind = kind;
+    // 色を個別指定していない場合は、区分の既定色（協力業者＝青）に追従させる
+    if (!(state.labelColors && state.labelColors['person:' + label])) {
+      preview.style.background = personDefaultBg(kind);
+      preview.style.color = '#fff';
+    }
+  }
   render();
 }
 
@@ -4137,6 +4243,7 @@ function renderListTable() {
       if (filter === 'jp' && k !== 'jp') return false;
       if (filter === 'trainee' && k !== 'trainee') return false;
       if (filter === 'tokutei' && k !== 'tokutei') return false;
+      if (filter === 'partner' && k !== 'partner') return false;
       return true;
     });
 
@@ -4146,7 +4253,31 @@ function renderListTable() {
 
     persons.forEach(name => {
       const kind = getPersonKind(name);
-      const rowCls = kind === 'trainee' ? 'trainee' : (kind === 'tokutei' ? 'tokutei' : 'jp');
+      const rowCls = kind === 'trainee' ? 'trainee'
+        : (kind === 'tokutei' ? 'tokutei'
+        : (kind === 'partner' ? 'partner' : 'jp'));
+
+      // 協力業者は会社単位。同じ日に複数現場へ入るのが普通なので、
+      // 現場プルダウン（1現場に付け替え）ではなく現場名タグを並べ、重複・未配置の警告色も出さない。
+      if (kind === 'partner') {
+        html += `<tr class="row-partner"><td class="name">${escapeHtml(name)}</td>`;
+        let usedDays = 0;
+        days.forEach(date => {
+          const sites = listSites.filter(site => {
+            const cell = state.schedule[site.id] && state.schedule[site.id][date];
+            return !!(cell && cell.magnets && cell.magnets.some(m => m.type === 'person' && m.label === name));
+          }).map(s => s.name);
+          if (sites.length > 0) {
+            usedDays++;
+            html += `<td>${sites.map(s => `<span class="site-tag">${escapeHtml(s)}</span>`).join('')}</td>`;
+          } else {
+            html += '<td class="empty">—</td>';
+          }
+        });
+        html += `<td style="text-align:center;font-weight:bold;">${usedDays}</td></tr>`;
+        return;
+      }
+
       html += `<tr class="row-${rowCls}"><td class="name">${escapeHtml(name)}</td>`;
       let workDays = 0;
       days.forEach(date => {
@@ -4312,7 +4443,7 @@ function renderMonthSummary() {
       const cell = state.schedule[s.id] && state.schedule[s.id][dateStr];
       if (!cell || !cell.magnets) return;
       cell.magnets.forEach(m => {
-        if (m.type !== 'person') return;
+        if (!countsAsHeadcount(m)) return;   // 協力業者（会社単位）は人工に数えない
         const affil = getPersonAffil(m.label);
         if (!summary[s.id][affil]) summary[s.id][affil] = 0;
         summary[s.id][affil]++;
