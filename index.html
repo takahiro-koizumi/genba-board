@@ -1324,6 +1324,109 @@
   .qual-check.on { color: #14532d; font-weight: bold; }
   .qual-hit-none { font-size: 12px; color: #999; padding: 6px 2px; }
 
+  /* ===== 資格から探す（逆引き） ===== */
+  .qs-controls {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 6px;
+  }
+  /* .filter-group は暗いツールバー用（白字）なので、明るいモーダルでは選択中/未選択が判別できない。
+     この切替だけ、選択中＝濃紺塗り／未選択＝白地に濃い文字にする */
+  #qs-mode-group button:not(.active) { background: #fff; border: 1px solid #ccc; color: #2b3a4a; }
+  #qs-mode-group button.active { background: #2b3a4a; border: 1px solid #2b3a4a; color: #fff; }
+  .modal .qs-controls input[type="search"] {
+    flex: 1 1 180px;
+    min-width: 140px;
+    padding: 7px 8px;
+    margin: 0;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-size: 13px;
+  }
+  .qs-daylabel { font-size: 12px; color: #555; white-space: nowrap; }
+  .modal .qs-daylabel select {
+    margin: 0 0 0 2px;
+    padding: 6px 4px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-size: 13px;
+  }
+  .qs-check {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 6px;          /* 指で押せる大きさにする */
+    font-size: 12px;
+    color: #444;
+    white-space: nowrap;
+    cursor: pointer;
+    border-radius: 4px;
+  }
+  .qs-check:active { background: rgba(0,0,0,0.05); }
+  .modal .qs-check input { margin: 0; width: 20px; height: 20px; }
+  .qs-note { font-size: 11px; color: #6b7280; margin-bottom: 6px; line-height: 1.6; }
+  .qs-body { flex: 1; overflow-y: auto; }
+  .qs-cat {
+    font-size: 11px;
+    font-weight: bold;
+    color: #fff;
+    background: #5b6672;
+    border-radius: 3px;
+    padding: 3px 7px;
+    margin: 10px 0 4px;
+    display: inline-block;
+  }
+  .qs-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 6px 2px;
+    border-bottom: 1px solid #f0f0ea;
+  }
+  /* 「該当者なし」の行は薄くしすぎると読めない。文字は保ったまま地の色で区別する */
+  .qs-row.empty { background: #fbfbf7; }
+  .qs-name {
+    flex: 0 0 40%;
+    max-width: 240px;
+    min-width: 0;
+    font-size: 13px;
+    font-weight: bold;
+    color: #2b3a4a;
+    line-height: 1.4;
+    overflow-wrap: anywhere;
+  }
+  .qs-num { font-weight: normal; color: #5f6672; font-size: 11px; margin-left: 4px; }
+  .qs-holders { flex: 1; min-width: 0; display: flex; flex-wrap: wrap; gap: 4px; }
+  .qs-holder {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 4px;
+    background: #fff;
+    border: 1px solid #b9c0c8;
+    border-radius: 4px;
+    padding: 3px 7px;
+    font-size: 12px;
+    overflow-wrap: anywhere;
+  }
+  .qs-holder .who { font-weight: bold; color: #b3261e; }
+  .qs-holder .site { font-size: 10px; color: #444; }
+  /* 未配置＝破線枠＋グレー。配置済み（実線・現場名が濃い）と一目で見分けられるように */
+  .qs-holder.free { background: #f4f4ee; border-style: dashed; border-color: #9aa0a6; }
+  .qs-holder.free .who { color: #6b7280; }
+  .qs-holder.free .site { color: #6b7280; }
+  .qs-holder.rest { background: #e3ecf7; border-color: #7f9dbf; }
+  .qs-holder .note { font-size: 10px; color: #5f6672; }
+  .qs-none { font-size: 12px; color: #7a7a7a; }
+  .qs-empty-msg { font-size: 13px; color: #555; padding: 16px 4px; text-align: center; line-height: 1.7; }
+  .qs-site-free { color: #6b7280; font-weight: normal; }
+  .qs-site-rest { color: #2f6ba3; font-weight: normal; }
+  @media (max-width: 700px) {
+    .qs-row { flex-direction: column; gap: 3px; }
+    .qs-name { flex: none; max-width: none; }
+  }
+
   /* Subtle marker on magnets for non-default affiliation */
   .magnet[data-affil="gardenhomes"]::after {
     content: '';
@@ -1777,6 +1880,7 @@
     </div>
     <button class="pc-only" onclick="openListView()">📋 一覧</button>
     <button class="pc-only" onclick="openMonthSummary()">📊 月別</button>
+    <button class="pc-only" onclick="openQualSearch()" title="資格を持っている人を探す">🎫 資格</button>
     <div class="spacer"></div>
     <button id="undo-btn" onclick="undo()" title="元に戻す" disabled>↩<span class="btn-lbl"> 戻る</span></button>
     <button id="edit-btn" class="primary" onclick="toggleEditMode()">編集<span class="btn-lbl">モード</span></button>
@@ -1809,6 +1913,7 @@
         </div>
         <button class="menu-item" onclick="openListView(); closeMenu()"><span class="mi-ico">📋</span>一覧</button>
         <button class="menu-item" onclick="openMonthSummary(); closeMenu()"><span class="mi-ico">📊</span>月別集計</button>
+        <button class="menu-item" onclick="openQualSearch(); closeMenu()"><span class="mi-ico">🎫</span>資格から探す</button>
         <div class="menu-divider"></div>
         <div class="menu-section-label">編集</div>
         <button class="menu-item" onclick="addSite(); closeMenu()"><span class="mi-ico">＋</span>現場を追加</button>
@@ -1917,6 +2022,27 @@
       <button onclick="closeColorPicker()">閉じる</button>
       <button class="danger" id="color-reset-btn" onclick="resetColorToDefault()">標準色に戻す</button>
     </div>
+  </div>
+</div>
+
+<!-- 資格から人を探す（逆引き） -->
+<div id="qsearch-modal" class="modal-bg">
+  <div class="modal modal-large">
+    <div class="modal-header">
+      <h2>資格から探す</h2>
+      <button class="close-btn" onclick="closeQualSearch()">×</button>
+    </div>
+    <div class="qs-controls">
+      <div class="filter-group" id="qs-mode-group" style="background:#f0f0e8;">
+        <button data-qsmode="qual" class="active" onclick="setQualSearchMode('qual')">資格別</button>
+        <button data-qsmode="person" onclick="setQualSearchMode('person')">人別</button>
+      </div>
+      <input type="search" id="qs-search" placeholder="資格名・氏名で絞り込み..." oninput="renderQualSearch()" />
+      <label class="qs-daylabel">配置：<select id="qs-day" onchange="renderQualSearch()"></select></label>
+      <label class="qs-check"><input type="checkbox" id="qs-hide-empty" checked onchange="renderQualSearch()"> 該当者なしを隠す</label>
+    </div>
+    <div id="qs-note" class="qs-note"></div>
+    <div id="qs-body" class="qs-body"></div>
   </div>
 </div>
 
@@ -2321,6 +2447,20 @@
       <div class="help-note">資格者証一覧に載っていない人（実習生など）は最初は「登録なし」です。<span class="hk">✏ 編集</span> からこのアプリに直接登録できます。<br>
         元のExcelを更新しても<strong>アプリには自動で反映されません</strong>。大きく変わったときは取り込み直しが必要です。</div>
 
+      <h4>資格から人を探す（逆引き）</h4>
+      <p>「玉掛けを持っているのは誰か」を調べるときは、ツールバーの <span class="hk">🎫 資格</span>（スマホは <span class="hk">︙</span> →「資格から探す」）を開きます。閲覧モードでも開けます。</p>
+      <ul>
+        <li><span class="hk">資格別</span>：資格ごとに、持っている人が並びます。人数も出ます。</li>
+        <li><span class="hk">人別</span>：人ごとに、持っている資格が並びます（<strong>このアプリに資格を登録していない人は出ません</strong>）。</li>
+        <li>名前の横に<strong>その日どの現場に入っているか</strong>を出します。入っていない人は「未配置」です。日付は上の <span class="hk">配置</span> で表示中の週の7日から選べます（今日を含む週なら初めは今日、別の週を見ているときはその週の月曜）。</li>
+        <li>上の欄に<strong>資格名でも氏名でも</strong>入力して絞り込めます（例：「玉掛」「木鋪」「技能講習」）。</li>
+        <li><span class="hk">該当者なしを隠す</span>（資格別のみ）のチェックを外すと、まだ誰も持っていない資格も一覧に出ます（次に誰に取らせるかの検討用）。</li>
+      </ul>
+      <div class="help-note"><strong>ここに出る人数は「全社の有資格者数」ではありません。</strong>このアプリに登録してある人だけを数えています。<br>
+        資格者証一覧の26名のうち17名ぶんを取り込み済みで、次の9名は<strong>未登録のため人数に入りません</strong>：平石 瑛久・髙橋 信彦・小宮 浩樹・小泉 孝宏・齋藤 利幸・黛 彰・石川 大明（盤面にマグネットが無い方）／佐藤 蘭太・山﨑 琉榎（マグネット名と漢字が違い、同一人物と確認できていない方）。<br>
+        実習生など名簿に無い人も、<span class="hk">✏ 編集</span> で登録するまでは出ません。<strong>正式な有資格者の確認は必ず資格者証の原本で行ってください</strong>（このアプリは有効期限を持っていません）。</div>
+      <div class="help-note">「完了」にした現場（6章）の配置は出ません。休み・研修の現場に入っている人は薄い青で表示します。協力業者のマグネットに資格を登録した場合は「協力業者」と付けて表示します。</div>
+
       <h3 id="help-13">13. データの保存とDropbox同期</h3>
       <ul>
         <li>変更は自動でこの端末（ブラウザ）に保存されます。</li>
@@ -2384,7 +2524,7 @@
       <ul>
         <li><strong>マグネットやメモが動かせない・変えられない</strong>：<span class="hk">編集モード</span> がOFF（閲覧モード）になっています。編集モードをONにしてください（7章）。</li>
         <li><strong>マグネットをタップしたら「情報」しか出ない</strong>：閲覧モードです。色・名前・区分・保有資格を変えるには <span class="hk">編集モード</span> をONにしてください（7章・12章）。</li>
-        <li><strong>スマホで、盤面に置いていない人の資格を見たい</strong>：<span class="hk">編集モード</span> をONにすると右側のマグネット置き場が出ます。そこでタップすれば見られます（スマホの閲覧モードでは置き場を隠して盤面を広く使う設計です）。</li>
+        <li><strong>スマホで、盤面に置いていない人の資格を見たい</strong>：<span class="hk">🎫 資格</span>（︙メニューの「資格から探す」）なら閲覧モードのまま全員分を見られます。個人の一覧を開きたいときは <span class="hk">編集モード</span> をONにすると右側のマグネット置き場が出ます（スマホの閲覧モードでは置き場を隠して盤面を広く使う設計です）。</li>
         <li><strong>あったはずの現場が表から消えた</strong>：だれかが「完了」にした可能性があります。<span class="hk">✅ 完了現場</span>（スマホは <span class="hk">︙</span> メニュー）を開いて確認し、必要なら「↩ 盤面に戻す」で戻せます（6章）。配置データは消えていません。</li>
         <li><strong>操作を間違えたとき</strong>：ツールバーの「↩ 戻る」ボタンで直前の操作を取り消せます（最大20回まで）。</li>
         <li><strong>他の人の変更が出てこない</strong>：⚙ でDropboxが「接続」になっているか確認してください。iPadはページを開き直すと最新になります。</li>
@@ -2706,6 +2846,12 @@ const DEFAULT_PERSON_QUALS = {
   '永井': [0,1,2,11,17,18,21,22,23,29,53,54,55],
 };
 
+// 名簿にいるがアプリの資格データに紐づいていない人（逆引きで「この人数が全員ではない」と示すため）
+const QUAL_UNMAPPED_ROSTER = [
+  '平石 瑛久', '髙橋 信彦', '小宮 浩樹', '小泉 孝宏', '齋藤 利幸', '黛 彰', '石川 大明',
+  '佐藤 蘭太', '山﨑 琉榎',
+];
+
 // ●に付記があるもの（例: 中型免許の「AT」限定）
 const QUAL_NOTE = {
   '木鋪': { 1: 'AT' },
@@ -2793,7 +2939,7 @@ function saveState() {
 
 function initialState() {
   return {
-    weekStart: mondayOf(new Date()).toISOString().slice(0,10),
+    weekStart: thisMondayStr(),
     sites: [
       { id: 's1', name: '印内三丁目33宅地開発', period: '5/上〜6/末' },
       { id: 's2', name: '軽井沢ひかり病院', period: '' },
@@ -2837,6 +2983,21 @@ function initialState() {
 }
 
 // ========== Date helpers ==========
+// 日付文字列は「その端末のローカル日付」で扱う。
+// toISOString()はUTCに変換するため、日本時間の 0:00〜8:59 に開くと1日前の日付になってしまう
+// （早朝に開くと「今週」が日曜始まりになる不具合があった）。ローカルの年月日から組み立てる。
+function localDateStr(d) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${dd}`;
+}
+function parseDateStr(s) {
+  const p = String(s).split('-').map(Number);
+  return new Date(p[0], (p[1] || 1) - 1, p[2] || 1);
+}
+function todayStr() { return localDateStr(new Date()); }
+function thisMondayStr() { return localDateStr(mondayOf(new Date())); }
 function mondayOf(d) {
   const date = new Date(d);
   const day = date.getDay();
@@ -2844,9 +3005,9 @@ function mondayOf(d) {
   return new Date(date.setDate(diff));
 }
 function addDays(dateStr, n) {
-  const d = new Date(dateStr);
+  const d = parseDateStr(dateStr);
   d.setDate(d.getDate() + n);
-  return d.toISOString().slice(0,10);
+  return localDateStr(d);
 }
 function formatDate(dateStr) {
   const d = new Date(dateStr);
@@ -2861,7 +3022,7 @@ function prevWeek() { state.weekStart = addDays(state.weekStart, -7); saveState(
 function nextWeek() { state.weekStart = addDays(state.weekStart, 7); saveState(); render(); }
 function prevDay()  { state.weekStart = addDays(state.weekStart, -1); saveState(); render(); }
 function nextDay()  { state.weekStart = addDays(state.weekStart,  1); saveState(); render(); }
-function thisWeek() { state.weekStart = mondayOf(new Date()).toISOString().slice(0,10); saveState(); render(); }
+function thisWeek() { state.weekStart = thisMondayStr(); saveState(); render(); }
 
 // ========== Render ==========
 function render() {
@@ -4440,7 +4601,8 @@ function getPersonQuals(label) {
   const src = (state.personQual && Array.isArray(state.personQual[label]))
     ? state.personQual[label]
     : (DEFAULT_PERSON_QUALS[qualSourceKey(label)] || []);
-  return src.filter(id => !!QUAL_LIST[id]);
+  // 数値に正規化する（'5' と 5 が混ざると突き合わせが噛み合わない）
+  return src.map(Number).filter(id => !!QUAL_LIST[id]);
 }
 
 // 改名しても出典（名簿の氏名）と〈AT〉などの注記を追えるようにする別名。
@@ -4600,6 +4762,161 @@ document.getElementById('qual-edit').addEventListener('change', (e) => {
   refreshPersonTooltip(label); // 盤面はツールチップだけ貼り替える
 });
 
+// ========== 資格から探す（逆引き） ==========
+let qualSearchMode = 'qual';   // 'qual' = 資格別 / 'person' = 人別
+
+// 資格を持っている人（プールにいる人員のうち、その資格IDを持つ人）
+function holdersOf(id) {
+  return (state.labels.person || []).filter(name => getPersonQuals(name).includes(id));
+}
+
+// その日その人がどこに配置されているか（完了現場は盤面に無いので除く）
+function placementOf(name, dateStr) {
+  const sites = [];
+  (state.sites || []).forEach(s => {
+    if (s.archived) return;
+    const cell = state.schedule[s.id] && state.schedule[s.id][dateStr];
+    if (cell && cell.magnets && cell.magnets.some(m => m.type === 'person' && m.label === name)) {
+      sites.push(s.name);
+    }
+  });
+  return sites;
+}
+
+function openQualSearch() {
+  // 日付プルダウン＝表示中の週の7日。今日が週内なら今日を既定にする
+  const sel = document.getElementById('qs-day');
+  const today = todayStr();
+  let opts = '';
+  let pick = '';
+  for (let i = 0; i < 7; i++) {
+    const d = addDays(state.weekStart, i);
+    if (d === today) pick = d;
+    opts += `<option value="${escapeAttr(d)}">${DAYS_JP[dayOfWeek(d)]} ${formatDate(d)}${d === today ? '（今日）' : ''}</option>`;
+  }
+  sel.innerHTML = opts;
+  sel.value = pick || state.weekStart;
+  document.getElementById('qsearch-modal').classList.add('show');
+  updateQualSearchButtons();
+  renderQualSearch();
+}
+
+function closeQualSearch() {
+  document.getElementById('qsearch-modal').classList.remove('show');
+}
+document.getElementById('qsearch-modal').addEventListener('click', (e) => {
+  if (e.target.id === 'qsearch-modal') closeQualSearch();
+});
+
+function setQualSearchMode(mode) {
+  qualSearchMode = mode;
+  updateQualSearchButtons();
+  renderQualSearch();
+}
+
+function updateQualSearchButtons() {
+  document.querySelectorAll('#qs-mode-group button[data-qsmode]').forEach(b => {
+    b.classList.toggle('active', b.dataset.qsmode === qualSearchMode);
+  });
+}
+
+// 保有者1人分のチップ（その日の配置現場つき）
+function qsHolderChip(name, dateStr, extraNote) {
+  const sites = placementOf(name, dateStr);
+  let cls = 'qs-holder';
+  let siteText = '未配置';
+  if (sites.length > 0) {
+    siteText = sites.join('・');
+    if (sites.every(s => /休み|研修/.test(s))) cls += ' rest';
+  } else {
+    cls += ' free';
+  }
+  // 協力業者は会社単位のマグネットなので、人と混ざらないよう印を付ける
+  const note = [extraNote, getPersonKind(name) === 'partner' ? '協力業者' : ''].filter(Boolean).join(' ');
+  return `<span class="${cls}"><span class="who">${escapeHtml(name)}</span>` +
+    (note ? `<span class="note">${escapeHtml(note)}</span>` : '') +
+    `<span class="site">${escapeHtml(siteText)}</span></span>`;
+}
+
+function renderQualSearch() {
+  const body = document.getElementById('qs-body');
+  const kw = (document.getElementById('qs-search').value || '').trim().toLowerCase();
+  const dateStr = document.getElementById('qs-day').value || state.weekStart;
+  const hideEmpty = document.getElementById('qs-hide-empty').checked;
+
+  const d = parseDateStr(dateStr);
+  const mapped = Object.keys(QUAL_ROSTER_NAME).length;
+  document.getElementById('qs-note').innerHTML =
+    `${QUAL_SOURCE_LABEL}をもとに、資格を持っている人を探せます（アプリ内で編集した分も反映）。` +
+    `「${DAYS_JP[d.getDay()]} ${formatDate(dateStr)}」の配置を各人の横に出しています。完了にした現場は含みません。<br>` +
+    `<strong>ここに出るのは、このアプリに資格を登録してある人だけです。</strong>` +
+    `名簿${mapped + QUAL_UNMAPPED_ROSTER.length}名のうち${mapped}名ぶんを取り込み済みで、` +
+    `次の${QUAL_UNMAPPED_ROSTER.length}名は未登録のため人数に入っていません：${escapeHtml(QUAL_UNMAPPED_ROSTER.join('・'))}。` +
+    `実習生など名簿に無い人も、登録するまでは出ません（12章）。`;
+
+  // 「該当者なしを隠す」は資格別だけの設定（人別は資格0件の人を出さないため意味を持たない）
+  const hideChk = document.getElementById('qs-hide-empty');
+  const hideLabel = hideChk.closest('.qs-check');
+  hideChk.disabled = (qualSearchMode !== 'qual');
+  if (hideLabel) hideLabel.style.opacity = hideChk.disabled ? '0.4' : '';
+
+  let html = '';
+  if (qualSearchMode === 'qual') {
+    let cat = '';
+    let shown = 0;
+    let hiddenByEmpty = 0;
+    QUAL_LIST.forEach((q, id) => {
+      const holders = holdersOf(id);
+      const hitByName = kw && holders.some(n => n.toLowerCase().includes(kw));
+      if (kw && !q.name.toLowerCase().includes(kw) && !q.cat.toLowerCase().includes(kw) && !hitByName) return;
+      if (hideEmpty && holders.length === 0) { hiddenByEmpty++; return; }
+      shown++;
+      if (q.cat !== cat) {
+        html += `<div><span class="qs-cat">${escapeHtml(q.cat)}</span></div>`;
+        cat = q.cat;
+      }
+      html += `<div class="qs-row${holders.length === 0 ? ' empty' : ''}">` +
+        `<div class="qs-name">${escapeHtml(q.name)}<span class="qs-num">${holders.length}人</span></div>` +
+        `<div class="qs-holders">` +
+        (holders.length === 0
+          ? '<span class="qs-none">該当者なし</span>'
+          : holders.map(n => qsHolderChip(n, dateStr, qualNote(n, id))).join('')) +
+        `</div></div>`;
+    });
+    if (shown === 0) {
+      // 隠しただけなのに「資格が無い」と読めてしまうのを避ける
+      html = hiddenByEmpty > 0
+        ? `<div class="qs-empty-msg">当てはまる資格は${hiddenByEmpty}件ありますが、いずれも<strong>該当者なし</strong>のため隠れています。<br>上の「該当者なしを隠す」のチェックを外すと表示されます。</div>`
+        : '<div class="qs-empty-msg">当てはまる資格がありません</div>';
+    }
+  } else {
+    // 人別：資格を持っている人だけを、プールの並び順で
+    let shown = 0;
+    (state.labels.person || []).forEach(name => {
+      const ids = getPersonQuals(name);
+      if (ids.length === 0) return;
+      const hitByQual = kw && ids.some(id =>
+        qualName(id).toLowerCase().includes(kw) || (QUAL_LIST[id].cat || '').toLowerCase().includes(kw));
+      if (kw && !name.toLowerCase().includes(kw) && !hitByQual) return;
+      shown++;
+      const sites = placementOf(name, dateStr);
+      const siteText = sites.length > 0 ? sites.join('・') : '未配置';
+      // 資格別のチップと同じ意味づけ（未配置＝グレー／休み・研修＝青）で色を合わせる
+      const siteCls = sites.length === 0 ? 'qs-site-free'
+        : (sites.every(s => /休み|研修/.test(s)) ? 'qs-site-rest' : '');
+      const kindTag = getPersonKind(name) === 'partner' ? '（協力業者）' : '';
+      html += `<div class="qs-row">` +
+        `<div class="qs-name">${escapeHtml(name + kindTag)}` +
+        `<span class="qs-num">${ids.length}件 / <span class="${siteCls}">${escapeHtml(siteText)}</span></span></div>` +
+        `<div class="qs-holders">` +
+        ids.map(id => `<span class="qual-chip">${escapeHtml(qualLabelWithNote(name, id))}</span>`).join('') +
+        `</div></div>`;
+    });
+    if (shown === 0) html = '<div class="qs-empty-msg">該当する人がいません</div>';
+  }
+  body.innerHTML = html;
+}
+
 function magnetTooltip(type, label) {
   if (type !== 'person') return label;
   const affil = AFFIL_LABEL[getPersonAffil(label)] || '';
@@ -4655,7 +4972,7 @@ function listNextWeek() {
   renderListTable();
 }
 function listThisWeek() {
-  state.weekStart = mondayOf(new Date()).toISOString().slice(0,10);
+  state.weekStart = thisMondayStr();
   saveState();
   render();
   renderListTable();
