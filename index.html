@@ -5107,7 +5107,7 @@ function renderListTable() {
           listSites.map(s => `<option value="${escapeAttr(s.id)}"${s.id === selectedId ? ' selected' : ''}>${escapeHtml(s.name)}</option>`)
         ).join('');
         html += `<td class="${conflictCls}${restCls}${unassignedCls}"${titleAttr}>` +
-          `<select class="list-site-select" data-person="${escapeAttr(name)}" data-date="${escapeAttr(date)}">${options}</select>` +
+          `<select class="list-site-select" data-kind="person" data-label="${escapeAttr(name)}" data-date="${escapeAttr(date)}">${options}</select>` +
           `<div class="cell-memo" contenteditable="true" data-memokey="${escapeAttr(memoKey)}">${escapeHtml(memo)}</div></td>`;
       });
       html += `<td style="text-align:center;font-weight:bold;">${workDays}</td></tr>`;
@@ -5130,20 +5130,37 @@ function renderListTable() {
         const sites = [];
         listSites.forEach(site => {
           if (placedAt(site.id, date) || noteSiteIds.has(site.id)) {
-            sites.push(site.name);
+            sites.push(site);
           }
         });
         return sites;
       });
       const used = sitesPerDay.filter(s => s.length > 0).length;
-      html += `<tr><td class="name" style="background:#fffaeb;">${escapeHtml(name)}</td>`;
-      sitesPerDay.forEach(sites => {
-        if (sites.length > 0) {
-          const conflictCls = sites.length > 1 ? ' conflict' : '';
-          html += `<td class="${conflictCls}">${sites.map(s => `<span class="site-tag">${escapeHtml(s)}</span>`).join('')}</td>`;
-        } else {
-          html += '<td class="empty unassigned">—</td>';
+      // 備考欄に置かれた常駐機は「週7日その現場」の意味なので、1日だけ付け替えるプルダウンは出さない
+      // （日セルに足すと備考と二重配置＝重複の赤になる。外したいときは盤面の備考欄から動かす）。
+      const resident = noteSiteIds.size > 0;
+      const residentMark = resident
+        ? ' <span style="font-size:10px;color:#888;font-weight:normal;" title="備考欄に配置されているため、変更は盤面の備考欄から行ってください">常駐</span>'
+        : '';
+      html += `<tr><td class="name" style="background:#fffaeb;">${escapeHtml(name)}${residentMark}</td>`;
+      sitesPerDay.forEach((sites, i) => {
+        const conflictCls = sites.length > 1 ? ' conflict' : '';
+        const titleAttr = sites.length > 1 ? ` title="複数配置: ${escapeAttr(sites.map(s => s.name).join(', '))}"` : '';
+        if (resident) {
+          if (sites.length > 0) {
+            html += `<td class="${conflictCls}"${titleAttr}>${sites.map(s => `<span class="site-tag">${escapeHtml(s.name)}</span>`).join('')}</td>`;
+          } else {
+            html += '<td class="empty unassigned">—</td>';
+          }
+          return;
         }
+        const unassignedCls = sites.length === 0 ? ' unassigned' : '';
+        const selectedId = sites.length > 0 ? sites[0].id : '';
+        const options = ['<option value="">（未配置）</option>'].concat(
+          listSites.map(s => `<option value="${escapeAttr(s.id)}"${s.id === selectedId ? ' selected' : ''}>${escapeHtml(s.name)}</option>`)
+        ).join('');
+        html += `<td class="${conflictCls}${unassignedCls}"${titleAttr}>` +
+          `<select class="list-site-select" data-kind="${listSection}" data-label="${escapeAttr(name)}" data-date="${escapeAttr(days[i])}">${options}</select></td>`;
       });
       html += `<td style="text-align:center;font-weight:bold;">${used}</td></tr>`;
     });
@@ -5169,22 +5186,24 @@ document.getElementById('list-table').addEventListener('blur', (e) => {
   saveState();
 }, true);
 
-// 一覧から個人の配置現場をプルダウンで変更する。
+// 一覧から配置現場をプルダウンで変更する（人員・重機・車両とも同じ扱い）。
 // 選んだ現場に付け替えるため、その日の他現場からは一旦すべて外す（重複も解消）。
+// 日付セルだけを触るので、備考(__note__)欄に置いた常駐機は影響を受けない。
 document.getElementById('list-table').addEventListener('change', (e) => {
   const sel = e.target;
   if (!sel.classList || !sel.classList.contains('list-site-select')) return;
-  const name = sel.dataset.person;
+  const kind = sel.dataset.kind || 'person';
+  const name = sel.dataset.label;
   const date = sel.dataset.date;
   if (!name || !date) return;
   state.sites.forEach(site => {
     const cell = state.schedule[site.id] && state.schedule[site.id][date];
     if (cell && cell.magnets) {
-      cell.magnets = cell.magnets.filter(m => !(m.type === 'person' && m.label === name));
+      cell.magnets = cell.magnets.filter(m => !(m.type === kind && m.label === name));
     }
   });
   if (sel.value) {
-    getCellData(sel.value, date).magnets.push({ id: genId(), type: 'person', label: name });
+    getCellData(sel.value, date).magnets.push({ id: genId(), type: kind, label: name });
   }
   saveState();
   render();
@@ -5998,6 +6017,16 @@ async function dbxCheckRemoteRev() {
   }
 }
 
+// 見ている週・絞込は「その端末の表示状態」。board.json には他端末の値も入っているが、
+// 取り込むときにローカルの値で上書きし直して、画面が勝手に飛ばないようにする。
+// （事務所PCが先週を見た瞬間に現場iPadまで先週へ飛ぶのを防ぐ）
+function keepLocalView(remote) {
+  if (!remote) return remote;
+  remote.weekStart = state.weekStart;
+  remote.viewFilter = state.viewFilter;
+  return remote;
+}
+
 // 他端末（iPad等）で更新があったら自動で取り込んで画面に反映
 async function dbxAutoPullIfChanged() {
   if (!dbxToken) return;
@@ -6015,6 +6044,7 @@ async function dbxAutoPullIfChanged() {
     if (typeof setDbxStatus === 'function') setDbxStatus('error', '空データ検出 手動取得推奨');
     return;
   }
+  keepLocalView(remote); // 週・絞込はこの端末のものを維持（比較の前に合わせる＝表示状態だけの差分では再描画しない）
   if (JSON.stringify(remote) === JSON.stringify(state)) return; // 実際は同じ
   console.log('[Dropbox] 他端末の変更を反映 (rev:', remoteRev || '?', ')');
   state = remote;
@@ -6027,6 +6057,7 @@ async function dbxManualPull() {
   const remote = await dbxLoad();
   if (remote) {
     if (!confirm('Dropboxから最新を取得してローカルを上書きしますか？')) return;
+    keepLocalView(remote); // 見ている週・絞込はこの端末のまま
     state = remote;
     _origSaveState(); // 取得だけの端末を最終更新者に刻まない＆再アップロードしない（自動プルと同じ挙動）
     render();
@@ -6051,18 +6082,25 @@ function scheduleDbxAutoSave() {
 
 // Hook into saveState
 const _origSaveState = saveState;
-saveState = function() {
-  // _dbxPendingを保存処理の最初に立てて、pull競合（ローカル変更が直前のpullで上書きされる事故）を防ぐ
-  if (dbxToken) _dbxPending = true;
-  _localPending = true;
-  // 実データが変わったときだけ「最終更新」を刻む（週送り・フィルターだけの操作では更新しない）
+// forceSync: データ内容は履歴末尾と同じでも Dropbox へ送りたい時（undo）だけ true。
+saveState = function(forceSync) {
+  // 実データが変わったときだけ「最終更新」を刻み、Dropbox へも送る。
+  // 週送り・フィルターは「見ているだけ」なので board.json を書き換えない。
+  // （閲覧しているだけの端末が週を送るたびに全社共有ファイルを上書きし、
+  //   その週が他の全端末に配られて画面が勝手に飛ぶため。表示状態は端末ごとに独立させる）
   const _snap = _undoSnapshot();
   const _dataChanged = !_undoHistory.length || _snap !== _undoHistory[_undoHistory.length - 1];
+  const _needSync = _dataChanged || forceSync;
+  if (_needSync) {
+    // _dbxPendingを保存処理の最初に立てて、pull競合（ローカル変更が直前のpullで上書きされる事故）を防ぐ
+    if (dbxToken) _dbxPending = true;
+    _localPending = true;
+  }
   if (_dataChanged) {
     stampEditor(); // 最終更新の刻印＋編集履歴の記録
   }
-  _origSaveState();
-  scheduleDbxAutoSave();
+  _origSaveState(); // localStorage へはいつでも保存する（この端末が見ていた週を覚えるため）
+  if (_needSync) scheduleDbxAutoSave();
   recordUndo(_snap); // 計算済みスナップショットを渡して再走査を省く
   updateLastEditorLabel();
 };
@@ -6115,7 +6153,7 @@ function undo() {
   // undo も「この端末による実データ変更」→ 最終更新の刻印＋履歴記録。
   // saveState は履歴末尾一致で刻まないため（_dataChanged=false）ここで明示的に呼ぶ。
   stampEditor();
-  saveState();
+  saveState(true); // 内容は履歴末尾と一致するが、取り消した結果は必ず全端末へ送る
   render();
   updateUndoButton();
 }
@@ -6369,6 +6407,7 @@ initNoteToolbar();
     await dbxEnsurePathRoot();
     const remote = await dbxLoad();
     if (remote) {
+      keepLocalView(remote); // 起動時も、この端末が最後に見ていた週で開く
       state = remote;
       _origSaveState();
       render();
