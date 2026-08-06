@@ -1665,6 +1665,13 @@
     border-radius: 3px;
     background: #fff;
   }
+  .list-table .dup-note {
+    font-size: 10px;
+    color: #c62828;
+    line-height: 1.2;
+    margin-top: 2px;
+    word-break: break-all;
+  }
   .list-table .cell-memo {
     display: block;
     min-height: 16px;
@@ -5159,8 +5166,13 @@ function renderListTable() {
         const options = ['<option value="">（未配置）</option>'].concat(
           listSites.map(s => `<option value="${escapeAttr(s.id)}"${s.id === selectedId ? ' selected' : ''}>${escapeHtml(s.name)}</option>`)
         ).join('');
+        // 同じ日に2現場以上ある時、プルダウンには先頭しか出ない。相手の現場名を下に書き出す
+        // （iPadはtitleのツールチップが出ないので、赤いのに相手が判らなくなる）
+        const dupNote = sites.length > 1
+          ? `<div class="dup-note">↑と重複: ${sites.slice(1).map(s => escapeHtml(s.name)).join(' / ')}</div>`
+          : '';
         html += `<td class="${conflictCls}${unassignedCls}"${titleAttr}>` +
-          `<select class="list-site-select" data-kind="${listSection}" data-label="${escapeAttr(name)}" data-date="${escapeAttr(days[i])}">${options}</select></td>`;
+          `<select class="list-site-select" data-kind="${listSection}" data-label="${escapeAttr(name)}" data-date="${escapeAttr(days[i])}">${options}</select>${dupNote}</td>`;
       });
       html += `<td style="text-align:center;font-weight:bold;">${used}</td></tr>`;
     });
@@ -5197,6 +5209,9 @@ document.getElementById('list-table').addEventListener('change', (e) => {
   const date = sel.dataset.date;
   if (!name || !date) return;
   state.sites.forEach(site => {
+    // 完了現場は過去の実績。一覧にもプルダウンにも出ていないので、ここで黙って消さない
+    // （消すと月別集計の実績が減り、現場を復帰させても戻らない）
+    if (site.archived) return;
     const cell = state.schedule[site.id] && state.schedule[site.id][date];
     if (cell && cell.magnets) {
       cell.magnets = cell.magnets.filter(m => !(m.type === kind && m.label === name));
