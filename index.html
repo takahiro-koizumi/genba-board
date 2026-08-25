@@ -1138,6 +1138,15 @@
   body.filter-trainee .magnet[data-type="person"]:not([data-kind="trainee"]) { display: none !important; }
   body.filter-tokutei .magnet[data-type="person"]:not([data-kind="tokutei"]) { display: none !important; }
   body.filter-partner .magnet[data-type="person"]:not([data-kind="partner"]) { display: none !important; }
+  /* 人員で絞り込んでいる間は重機・車両も隠す（車両フィルタが人員・重機を隠すのと対称） */
+  body.filter-jp .magnet[data-type="equipment"],
+  body.filter-jp .magnet[data-type="vehicle"],
+  body.filter-trainee .magnet[data-type="equipment"],
+  body.filter-trainee .magnet[data-type="vehicle"],
+  body.filter-tokutei .magnet[data-type="equipment"],
+  body.filter-tokutei .magnet[data-type="vehicle"],
+  body.filter-partner .magnet[data-type="equipment"],
+  body.filter-partner .magnet[data-type="vehicle"] { display: none !important; }
   body.filter-vehicle .magnet[data-type="person"],
   body.filter-vehicle .magnet[data-type="equipment"] { display: none !important; }
   body.filter-vehicle .cell-headcount,
@@ -3424,7 +3433,8 @@ function renderPool() {
     el.addEventListener('click', (e) => {
       if (e.target.classList.contains('del')) return;
       if (Sortable.active) return;
-      openColorPicker(activeTab, label, !editMode);
+      // クローンごとマスに残るハンドラなので、activeTab（後でタブを切り替えられる）ではなく自分の種別を見る
+      openColorPicker(el.dataset.type, el.dataset.label, !editMode);
     });
     return el;
   }
@@ -3523,14 +3533,16 @@ function findDuplicateOnDay(dateStr, type, label, excludeMagnetEl) {
 function onMagnetAdd(evt) {
   const item = evt.item;
   if (!item.dataset.id) item.dataset.id = genId();
-  // Refresh delete button (clone from pool doesn't have it)
-  if (!item.querySelector('.del')) {
-    const del = document.createElement('span');
-    del.className = 'del';
-    del.textContent = '×';
-    del.onclick = (e) => { e.stopPropagation(); deleteMagnetFromCell(item); };
-    item.appendChild(del);
-  }
+  // ×ボタンは必ず作り直す。
+  // プールからのクローンには「プールから削除」の×（deletePoolLabel）が付いてくるので、
+  // そのまま残すとマスの×を押した時に「プールから削除しますか？」と聞かれてしまう。
+  const oldDel = item.querySelector('.del');
+  if (oldDel) oldDel.remove();
+  const del = document.createElement('span');
+  del.className = 'del';
+  del.textContent = '×';
+  del.onclick = (e) => { e.stopPropagation(); deleteMagnetFromCell(item); };
+  item.appendChild(del);
 
   // 同日重複チェック
   const toList = evt.to;
