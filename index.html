@@ -1681,6 +1681,34 @@
     margin-top: 2px;
     word-break: break-all;
   }
+  /* 重機・車両の一覧：常駐先（備考欄）をこの行から付け替える */
+  .list-table.section-machine td.name {
+    min-width: 150px;
+    width: 150px;
+    background: #fffaeb;
+  }
+  .list-table tr.row-resident td.name { background: #fdf3dc; }
+  .list-table .resident-pick { margin-top: 3px; }
+  .list-table .resident-label {
+    display: inline-block;
+    font-size: 9px;
+    font-weight: normal;
+    color: #8a6d3b;
+    background: #f6e3b8;
+    border-radius: 8px;
+    padding: 1px 5px;
+    margin-bottom: 2px;
+  }
+  .list-table .list-resident-select {
+    width: 100%;
+    box-sizing: border-box;
+    font-size: 10px;
+    font-weight: normal;
+    padding: 2px 3px;
+    border: 1px solid #d9cfa8;
+    border-radius: 3px;
+    background: #fffdf6;
+  }
   .list-table .cell-memo {
     display: block;
     min-height: 16px;
@@ -2422,13 +2450,14 @@
       <p><span class="hk">📋 一覧</span> で、その週の配置を一覧表で確認できます。</p>
       <ul>
         <li>上部で <span class="hk">人員</span> <span class="hk">重機</span> <span class="hk">車両</span> を切り替え、名前で検索もできます。</li>
-        <li>人員表の各マスは<strong>プルダウン</strong>になっていて、その人のその日の配置現場を変更できます。「（未配置）」を選ぶと配置を外せます。</li>
+        <li>各マスは<strong>プルダウン</strong>になっていて、その人・その機械のその日の配置現場を変更できます（人員・重機・車両とも）。「（未配置）」を選ぶと配置を外せます。</li>
         <li>プルダウンで現場を変えると、その日の他の現場からは自動で外れます。</li>
         <li>右端に、その週の「稼働日数」が表示されます。</li>
         <li>「完了」にした現場（6章）は一覧に出ません。プルダウンの配置先としても選べません。その現場に置いたままの人・重機は、その日ほかの現場に置いていなければ<strong>未配置（黄色いマス）扱いになり、右端の「稼働日数」にも数えません</strong>（配置データ自体は消えていません。盤面に戻せば元どおり数えます）。</li>
         <li>プルダウンで現場を変えると、その日は「完了」にした現場からも外れます（一覧には見えていませんが、データからも外れます）。</li>
       </ul>
       <div class="help-note"><strong>備考欄の重機・車両：</strong>ボード右端の「備考」列に置いた重機・車両は、その現場に<strong>その週7日とも配置されている</strong>ものとして一覧に出ます（稼働日数にも入ります）。常駐している機械を備考に置いておけば、一覧から漏れません。人員は対象外です。</div>
+      <div class="help-note"><strong>重機・車両の「常駐」プルダウン：</strong>重機・車両の一覧は、名前の下に <span class="hk">常駐</span> のプルダウンがあります。ここで現場を選ぶと、<strong>備考欄の配置ごとその現場へ移り、週7日ぶん（この週より先も）まとめて変わります</strong>。機械が別の現場へ移ったときはここで変えてください。<br>常駐している機械の日付マスは、プルダウンではなく現場名タグの表示になります（1日だけ付け替えると備考と二重配置になり、赤い重複表示になってしまうためです）。<strong>その日だけ別の現場へ出す</strong>ときは、常駐を「（常駐なし）」にしてから日付マスのプルダウンで指定するか、ボードの日付マスに直接マグネットを置いてください。</div>
       <div class="help-note"><strong>協力業者の行：</strong>人員表に「協」バッジ付きで出ます。会社単位なので<strong>プルダウンではなく現場名タグ</strong>で表示し、同じ日に複数の現場に入っていても<strong>赤いマス（重複）にはなりません</strong>。入っていない日は灰色の「—」で、黄色い未配置ハイライトも出ません。上部の <span class="hk">協力業者</span> ボタンで協力業者だけの表にできます。</div>
 
       <h3 id="help-11">11. 月別集計を見る</h3>
@@ -5155,13 +5184,24 @@ function renderListTable() {
         return sites;
       });
       const used = sitesPerDay.filter(s => s.length > 0).length;
-      // 備考欄に置かれた常駐機は「週7日その現場」の意味なので、1日だけ付け替えるプルダウンは出さない
-      // （日セルに足すと備考と二重配置＝重複の赤になる。外したいときは盤面の備考欄から動かす）。
+      // 備考欄に置かれた常駐機は「週7日その現場」の意味なので、日セルには1日だけ付け替える
+      // プルダウンを出さない（日セルに足すと備考と二重配置＝重複の赤になる）。
+      // 代わりに名前欄の「常駐」プルダウンで、備考欄の配置ごと別の現場へ移せるようにしている。
       const resident = noteSiteIds.size > 0;
-      const residentMark = resident
-        ? ' <span style="font-size:10px;color:#888;font-weight:normal;" title="備考欄に配置されているため、変更は盤面の備考欄から行ってください">常駐</span>'
+      const residentSites = listSites.filter(s => noteSiteIds.has(s.id));
+      const residentId = residentSites.length > 0 ? residentSites[0].id : '';
+      const residentOptions = ['<option value="">（常駐なし）</option>'].concat(
+        listSites.map(s => `<option value="${escapeAttr(s.id)}"${s.id === residentId ? ' selected' : ''}>${escapeHtml(s.name)}</option>`)
+      ).join('');
+      // 2現場以上の備考に置かれている時はプルダウンに先頭しか出ないので、残りを書き出す
+      const residentExtra = residentSites.length > 1
+        ? `<div class="dup-note">他: ${residentSites.slice(1).map(s => escapeHtml(s.name)).join(' / ')}</div>`
         : '';
-      html += `<tr><td class="name" style="background:#fffaeb;">${escapeHtml(name)}${residentMark}</td>`;
+      html += `<tr class="${resident ? 'row-resident' : ''}"><td class="name">${escapeHtml(name)}` +
+        `<div class="resident-pick">` +
+        `<span class="resident-label" title="備考欄＝その現場に週7日ずっと。ここで選ぶと備考欄の配置ごと移ります">常駐</span>` +
+        `<select class="list-resident-select" data-kind="${listSection}" data-label="${escapeAttr(name)}">${residentOptions}</select>` +
+        `${residentExtra}</div></td>`;
       sitesPerDay.forEach((sites, i) => {
         const conflictCls = sites.length > 1 ? ' conflict' : '';
         const titleAttr = sites.length > 1 ? ` title="複数配置: ${escapeAttr(sites.map(s => s.name).join(', '))}"` : '';
@@ -5195,6 +5235,8 @@ function renderListTable() {
     }
   }
   html += '</tbody>';
+  // 重機・車両は名前欄に常駐先プルダウンが入るので、名前列を広くする
+  tbl.className = 'list-table' + (listSection === 'person' ? '' : ' section-machine');
   tbl.innerHTML = html;
 }
 
@@ -5231,6 +5273,48 @@ document.getElementById('list-table').addEventListener('change', (e) => {
   });
   if (sel.value) {
     getCellData(sel.value, date).magnets.push({ id: genId(), type: kind, label: name });
+  }
+  saveState();
+  render();
+  renderListTable();
+});
+
+// 一覧（重機・車両）の名前欄にある「常駐」プルダウン。
+// 備考(__note__)欄の配置ごと別の現場へ移す＝週7日ぶん・毎週まとめて変わる。
+// 日付セルは触らない（その日だけの臨時配置は、常駐を外してから日セルで指定する）。
+document.getElementById('list-table').addEventListener('change', (e) => {
+  const sel = e.target;
+  if (!sel.classList || !sel.classList.contains('list-resident-select')) return;
+  const kind = sel.dataset.kind;
+  const name = sel.dataset.label;
+  if (!kind || !name) return;
+
+  // 完了現場の備考は過去の実績なので、ここでは読まないし消さない（日セルの付け替えと同じ扱い）
+  const isThere = (site) => {
+    const cell = state.schedule[site.id] && state.schedule[site.id]['__note__'];
+    return !!(cell && cell.magnets && cell.magnets.some(m => m.type === kind && m.label === name));
+  };
+  const current = state.sites.filter(s => !s.archived && isThere(s));
+  const toSite = sel.value ? state.sites.find(s => s.id === sel.value) : null;
+
+  // 常駐先を変える／やめるのは、その週だけでなく毎週ぶんに効くので確認する
+  if (current.length > 0) {
+    const from = current.map(s => s.name).join('・');
+    const msg = toSite
+      ? `「${name}」の常駐先を「${from}」から「${toSite.name}」に変えますか？\n備考欄の配置ごと移るので、週7日ぶん（この週より先も）変わります。`
+      : `「${name}」の常駐をやめますか？\n「${from}」の備考欄から外れます。以後は日ごとに配置できます。`;
+    if (!confirm(msg)) { renderListTable(); return; }   // プルダウンを元の現場に戻す
+  }
+
+  state.sites.forEach(site => {
+    if (site.archived) return;
+    const cell = state.schedule[site.id] && state.schedule[site.id]['__note__'];
+    if (cell && cell.magnets) {
+      cell.magnets = cell.magnets.filter(m => !(m.type === kind && m.label === name));
+    }
+  });
+  if (toSite) {
+    getCellData(toSite.id, '__note__').magnets.push({ id: genId(), type: kind, label: name });
   }
   saveState();
   render();
