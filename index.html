@@ -822,6 +822,72 @@
     pointer-events: none;
   }
   .pv-msg { color: #fff; text-align: center; padding: 60px 20px; font-size: 14px; line-height: 1.8; white-space: pre-line; }
+
+  /* ===== アプリの更新情報 ===== */
+  .toolbar .changelog-btn { position: relative; }
+  .changelog-btn .cl-dot {
+    display: none;
+    position: absolute;
+    top: 3px;
+    right: 3px;
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    background: #ef4444;
+    box-shadow: 0 0 0 2px #2b3a4a;
+  }
+  .changelog-btn.has-new .cl-dot { display: block; }
+  /* ツールバーが混み合う幅では、⚙・💾 と同じくアイコンだけにして段が増えないようにする */
+  @media (max-width: 1280px) { .changelog-btn .cl-lbl { display: none; } }
+  .cl-new-pill {
+    display: none;
+    margin-left: auto;
+    background: #ef4444;
+    color: #fff;
+    font-size: 10px;
+    font-weight: bold;
+    padding: 1px 7px;
+    border-radius: 8px;
+  }
+  .cl-new-pill.show { display: inline-block; }
+  .modal.changelog-modal { width: 640px; max-width: 94vw; min-width: 0; }
+  .cl-intro { font-size: 12px; color: #666; line-height: 1.6; margin-bottom: 8px; }
+  .cl-list { max-height: 62vh; overflow-y: auto; -webkit-overflow-scrolling: touch; }
+  .cl-entry { padding: 10px 2px 12px; border-top: 1px solid #eee; }
+  .cl-entry:first-child { border-top: 0; }
+  .cl-head { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin-bottom: 4px; }
+  .cl-date { font-size: 12px; color: #666; font-variant-numeric: tabular-nums; }
+  .cl-tag { font-size: 11px; font-weight: bold; color: #fff; padding: 1px 7px; border-radius: 8px; background: #6b7280; }
+  .cl-tag.t-new { background: #16a34a; }
+  .cl-tag.t-imp { background: #2563eb; }
+  .cl-tag.t-fix { background: #d97706; }
+  .cl-entry .cl-new-pill { display: inline-block; margin-left: 0; }
+  .cl-title { font-size: 14px; font-weight: bold; color: #1f2937; margin: 2px 0 4px; }
+  .cl-items { margin: 0; padding-left: 20px; font-size: 13px; color: #374151; line-height: 1.65; }
+  .cl-entry.unseen { background: #fffbeb; border-radius: 6px; padding-left: 8px; padding-right: 8px; }
+  .cl-toast {
+    position: fixed;
+    left: 50%;
+    bottom: 16px;
+    transform: translateX(-50%);
+    z-index: 90; /* モーダル（100）より下＝開いた画面の邪魔をしない */
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: max-content;
+    max-width: min(640px, 94vw);
+    padding: 10px 12px 10px 16px;
+    background: #2b3a4a;
+    color: #fff;
+    border-radius: 10px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+    font-size: 13px;
+    line-height: 1.5;
+  }
+  .cl-toast-text { flex: 1; min-width: 0; }
+  .cl-toast button { border: 0; border-radius: 6px; cursor: pointer; font-size: 13px; white-space: nowrap; }
+  .cl-toast-open { background: #ffd93d; color: #222; font-weight: bold; padding: 7px 12px; }
+  .cl-toast-close { background: transparent; color: #fff; font-size: 18px; line-height: 1; padding: 4px 6px; }
   .settings-modal .modal { min-width: 420px; max-width: 90vw; }
   .settings-section {
     padding: 12px 0;
@@ -2085,7 +2151,7 @@
       -webkit-print-color-adjust: exact !important;
       print-color-adjust: exact !important;
     }
-    .toolbar, .pool, .modal-bg, .note-toolbar, .pdf-viewer { display: none !important; }
+    .toolbar, .pool, .modal-bg, .note-toolbar, .pdf-viewer, .cl-toast { display: none !important; }
     .site-drag-handle, .site-copy-handle, .day-copy-btn,
     .cell-copy-handle, .cell-reset-btn, .magnet .del, .site-memo-btn.empty { display: none !important; }
     /* 配布用の週間表なので「今日」の色付けは印刷しない */
@@ -2179,6 +2245,7 @@
     <span id="last-editor-label" class="last-editor pc-only" onclick="openHistory()" title="編集履歴を見る" style="display:none"></span>
     <button class="pc-only" onclick="openHistory()" title="編集履歴（いつ・どの端末が編集したか）">🕘 履歴</button>
     <button class="pc-only" onclick="openHelp()" title="使い方・ヘルプ">❓ ヘルプ</button>
+    <button class="pc-only changelog-btn" id="changelog-btn" onclick="openChangelog()" title="アプリの更新情報（何が変わったか）">📢<span class="cl-lbl"> 更新情報</span><span class="cl-dot"></span></button>
     <button class="pc-only" onclick="openSettings()" title="設定">⚙</button>
     <!-- スマホ専用: 「︙」メニュー（PCでは非表示） -->
     <div class="menu-wrap">
@@ -2209,6 +2276,7 @@
         <div class="menu-section-label">その他</div>
         <button class="menu-item" onclick="openHistory(); closeMenu()"><span class="mi-ico">🕘</span>編集履歴</button>
         <button class="menu-item" onclick="openHelp(); closeMenu()"><span class="mi-ico">❓</span>使い方・ヘルプ</button>
+        <button class="menu-item" onclick="openChangelog(); closeMenu()"><span class="mi-ico">📢</span>アプリの更新情報<span class="cl-new-pill" id="changelog-menu-new">NEW</span></button>
         <button class="menu-item" onclick="openSettings(); closeMenu()"><span class="mi-ico">⚙</span>設定</button>
         <div class="menu-divider"></div>
         <div class="menu-status-line" id="menu-status-line" onclick="openSettings(); closeMenu()" title="タップで設定（Dropbox接続）を開く">未接続</div>
@@ -2510,6 +2578,28 @@
   </div>
 </div>
 
+<!-- アプリの更新情報（何が変わったか）。中身は CHANGELOG（スクリプト内）から作る -->
+<div id="changelog-modal" class="modal-bg">
+  <div class="modal changelog-modal">
+    <div class="modal-header">
+      <h2>📢 アプリの更新情報</h2>
+      <button class="close-btn" onclick="closeChangelog()">×</button>
+    </div>
+    <p class="cl-intro">アプリが新しくなったときの変更点です（新しい順）。<br>だれが・いつ盤面を編集したかは「🕘 履歴」で見られます。</p>
+    <div id="changelog-list" class="cl-list"></div>
+    <div class="modal-actions">
+      <button onclick="closeChangelog()">閉じる</button>
+    </div>
+  </div>
+</div>
+
+<!-- 更新後に一度だけ画面下に出すお知らせ（盤面の操作は止めない・しばらくすると消える） -->
+<div id="changelog-toast" class="cl-toast" role="status" style="display:none">
+  <span class="cl-toast-text" id="changelog-toast-text"></span>
+  <button type="button" class="cl-toast-open" onclick="hideChangelogToast(); openChangelog()">内容を見る</button>
+  <button type="button" class="cl-toast-close" onclick="hideChangelogToast()" title="閉じる">×</button>
+</div>
+
 <!-- PDFビューア（pdf.js でアプリ内に全ページを描画。iPad・ホーム画面アプリでも同じように見られる） -->
 <div id="pdf-viewer" class="pdf-viewer">
   <div class="pv-bar">
@@ -2606,6 +2696,7 @@
         <a onclick="helpJump('help-18')">18. 在席表示（今だれが操作中か）</a>
         <a onclick="helpJump('help-19')">19. 編集履歴</a>
         <a onclick="helpJump('help-20')">20. 困ったとき・ヒント</a>
+        <a onclick="helpJump('help-21')">21. アプリの更新情報</a>
       </div>
 
       <h3 id="help-1">1. このアプリについて</h3>
@@ -2887,6 +2978,15 @@
         <li><strong>フォルダ保存ができない</strong>：フォルダへの保存はChrome / Edgeのみ対応です。Safari・Firefoxではダウンロードになります。</li>
         <li>重機・車両は、よく使うものが最初から登録されています。</li>
         <li>もしデータがおかしくなっても、バックアップ（14章）から復元できます。</li>
+      </ul>
+
+      <h3 id="help-21">21. アプリの更新情報</h3>
+      <p>アプリに機能が増えたり、使い方が変わったりしたときの内容は、ツールバーの <span class="hk">📢</span>（更新情報。画面が広いときは「📢 更新情報」と出ます。スマホは <span class="hk">︙</span> →「アプリの更新情報」）で見られます。新しい順に、日付と「新機能・改善・修正・お知らせ」の区分つきで並びます。</p>
+      <ul>
+        <li>まだ見ていないお知らせがあると、ボタンに<strong>赤い印</strong>（スマホはメニューに <strong>NEW</strong>）が付きます。開くと消えます。</li>
+        <li>アプリが更新されたあと最初に開いたときは、画面の下に短いお知らせが出ます。15秒ほどで消え、盤面の操作のじゃまはしません。<span class="hk">内容を見る</span> で詳しく見られます。</li>
+        <li>「見たかどうか」は端末ごとに覚えます。はじめて使う端末では、それまでの更新は「見たもの」として扱います。</li>
+        <li>盤面を<strong>だれが・いつ編集したか</strong>は、こちらではなく「🕘 履歴」（19章）で見られます。</li>
       </ul>
       <p class="help-intro" style="margin-top:16px;">― 現場配置ボード 使い方ガイド ―</p>
     </div>
@@ -6065,6 +6165,262 @@ function helpJump(id) {
 document.getElementById('help-modal').addEventListener('click', (e) => {
   if (e.target.id === 'help-modal') closeHelp();
 });
+
+// ========== アプリの更新情報（📢 更新情報） ==========
+// 利用者に「アプリの何が変わったか」を知らせる。見た目や使い方が変わる変更をしたら、先頭に1件足す（CLAUDE.md の編集ルール）。
+// id はこの端末で「どこまで見たか」の目印なので、重複させない・後から変えない。
+// tag は 新機能 / 改善 / 修正 / お知らせ。文は現場の人が読んで分かる言葉で書く（中の仕組みの話は書かない）。
+const CHANGELOG = [
+  { id: '2026-09-12-worksites', date: '2026-09-12', tag: '新機能', title: '曜日の見出しに、その日の稼働現場数を表示',
+    items: [
+      '「計○人」の横に「○現場」と出ます。人（協力業者を含む）が1人以上入っている現場の数です。',
+      '「休み・研修」、名前が「事務所」「置場」で終わる現場、重機・車両だけの現場、完了にした現場は数えません。',
+      '数えるかどうかは、編集モードで現場名をタップした設定画面で、現場ごとに変えられます。',
+    ] },
+  { id: '2026-09-12-changelog', date: '2026-09-12', tag: '新機能', title: 'アプリの更新情報（この画面）を追加',
+    items: [
+      'アプリに機能が増えたり使い方が変わったりしたときの内容を、ここで確認できます。',
+      'まだ見ていないお知らせがあると、ツールバーの 📢（更新情報）ボタンに赤い印が付きます（スマホは ︙ メニューの「アプリの更新情報」に NEW）。アプリが新しくなって最初に開いたときは、画面の下にも短いお知らせが出ます。',
+    ] },
+  { id: '2026-09-11-today-memo', date: '2026-09-11', tag: '新機能', title: '今日の列に色付け・現場メモ（注意事項・PDF）',
+    items: [
+      '今日の日付の列をオレンジ色で表示し、見出しに「今日」と出します。',
+      '現場ごとに「現場メモ」を付けられるようにしました。朝礼の時間・搬入の制限などの注意事項や、施工計画書・図面などのPDFを登録できます。',
+      '書き込み・PDFの追加は編集モードで、現場名の下の「＋ メモ・PDF」から行います（出ていないときは現場名をタップ →「📝 現場メモ」）。',
+      'メモやPDFがある現場は、現場名の下に黄色い付箋（📝）が出ます。閲覧モードでもタップすれば見られ、PDFはアプリの中で開けます。PDFの追加・表示にはDropbox接続が必要で、Dropboxの「現場資料」フォルダに保存されます。',
+    ] },
+  { id: '2026-08-26-resident', date: '2026-08-26', tag: '改善', title: '週間一覧で重機・車両の「常駐」先を変えられるように',
+    items: [
+      '週間一覧の重機・車両の表で、名前の下に「常駐」のプルダウンを追加しました。現場を選ぶと、その機械が備考欄の配置ごとその現場へ移ります。',
+      '備考欄はどの週でも共通なので、常駐先を変えると表示中の週だけでなく、ほかの週もまとめて変わります（今の常駐先を変える・やめるときは確認が出ます）。「（常駐なし）」を選ぶと常駐をやめ、日ごとに配置できるようになります。',
+    ] },
+  { id: '2026-08-25-filter-fix', date: '2026-08-25', tag: '修正', title: '絞り込み表示と×ボタンの不具合を修正',
+    items: [
+      '日本人・実習生などで絞り込んだとき、重機・車両も隠れるようにしました。',
+      'プールから置いた直後のマグネットの×を押すと「プールから削除しますか？」と聞かれてしまう不具合を直しました。',
+    ] },
+  { id: '2026-08-07-own-view', date: '2026-08-07', tag: '改善', title: '見ている週が、他の端末の操作で切り替わらないように',
+    items: [
+      '週送り・絞り込みは端末ごとの表示になり、他の人が週を切り替えても自分の画面は変わりません。',
+      '週間一覧の重機・車両の表でも、人と同じように日ごとのプルダウンで現場を選べるようにしました（備考欄に置いている常駐の機械は除きます）。',
+      '週間一覧のプルダウンで現場を変えても、「完了」にした現場に残っている配置は消えないようにしました（月別集計の実績が減らないように）。',
+      '重機・車両が同じ日に2つ以上の現場に入っている（赤いマス）ときは、プルダウンの下に「↑と重複: 現場名」と相手の現場を表示します。',
+    ] },
+  { id: '2026-07-28-quals', date: '2026-07-28', tag: '新機能', title: '協力業者欄・保有資格・資格から探す',
+    items: [
+      '右側のプールの人員タブに「協力業者」欄を追加しました。「＋ 協力業者を追加」で業者名（会社単位）のマグネットを作れます。青いマグネットに「協」の印が付きます。',
+      '協力業者はマスの人数・「計○人」・月別集計には数えず、同じ日に複数の現場へ置いても重複の確認は出ません。絞り込みボタンにも「協力業者」を追加しました。',
+      '作業員のマグネットをタップすると、保有資格が見られます。資格を直すときは、編集モードで「✏ 編集」を押します。',
+      '閲覧モードでも、マグネットをタップすると「情報」（人は区分・所属・資格、重機・車両は型式など）が開くようになりました。見るだけなので、盤面は変わりません。',
+      '「🎫 資格」で、その資格を持っている人と、その日の配置先を一覧できます。',
+      '朝9時より前に「今週」ボタンを押すと、週が1日ずれて日曜はじまりになってしまう不具合を直しました。',
+    ] },
+  { id: '2026-07-22-archive', date: '2026-07-22', tag: '新機能', title: '終わった現場を「完了」にして隠せるように',
+    items: [
+      '編集モードで現場名をタップ →「✅ この現場を完了にする」で、終わった現場を盤面と週間一覧から隠せます（全員の画面から隠れます）。配置の記録は消えず、月別集計にも「完了」の印付きで残ります。',
+      '隠した現場は「✅ 完了現場」（スマホは ︙ メニュー）を開き、編集モードで「↩ 盤面に戻す」を押すと戻せます。',
+      '現場1週間分コピーは、表示している週の7日分だけをコピーするようにしました。',
+    ] },
+  { id: '2026-07-16-list-idle', date: '2026-07-16', tag: '改善', title: '週間一覧に空いている重機・車両も表示',
+    items: [
+      '重機・車両の一覧に、その週どこにも置いていないものも出るようにし、空いている日を黄色で表示します。',
+    ] },
+  { id: '2026-07-14-note-machines', date: '2026-07-14', tag: '改善', title: '備考欄の重機・車両を週間一覧に反映',
+    items: [
+      '備考欄に置いた重機・車両は、その現場に週7日とも配置されているものとして週間一覧に出ます。',
+    ] },
+  { id: '2026-07-13-calendar', date: '2026-07-13', tag: '改善', title: '休日カレンダーの修正・未配置の人を黄色に',
+    items: [
+      '7月の会社休日を直しました（7/11を休日から外し、7/4を休日にしました）。',
+      '週間一覧で、その日どの現場にも入っていない人を黄色で表示します。',
+    ] },
+  { id: '2026-07-13-mobile', date: '2026-07-13', tag: '改善', title: 'スマホで使いやすく',
+    items: [
+      'スマホではツールバーのボタンを「︙」メニューにまとめました（PC・iPadは今までどおり）。スマホでは ◀◀ ▶▶（1週間送り）は出さず、◀ ▶（1日ずつ）と「今週」で切り替えます。',
+      'スマホで絞り込み中は、ツールバーに「絞込: ○○ ✕」が出ます。タップすると全体表示に戻ります。',
+      'スマホの閲覧中はマグネット置き場を隠し、盤面を広く使えるようにしました（編集モードにすると出てきます）。',
+      '設定などの縦に長い画面で、上の方（Dropboxの接続など）がはみ出して見えなくなることがあったのを直しました。スクロールで全体を見られます。',
+    ] },
+  { id: '2026-07-06-edit-history', date: '2026-07-06', tag: '新機能', title: '編集履歴（🕘 履歴）',
+    items: [
+      'いつ・どの端末が盤面を編集したかを見られるようにしました。',
+      '重機・車両を備考欄に置くとき、同じものが別の現場の備考欄にもあると確認が出るようにしました。',
+    ] },
+  { id: '2026-07-03-presence', date: '2026-07-03', tag: '新機能', title: '最終更新・操作中の端末の表示、閲覧モードの徹底',
+    items: [
+      '「最終更新: ○○ 14:32」と、今どの端末が閲覧・編集しているかを表示します。2台以上が同時に編集していると警告します。',
+      '「○○」には端末の名前が出ます。「⚙ 設定」の「この端末の名前」で、端末ごとに名前を付けてください（例：事務所PC）。付けていない端末は「名前未設定のPC」と出ます。',
+      '閲覧モードでは、マグネットの移動・コピー・削除、現場の並べ替え、メモ・工期・現場名・色の変更ができないようにしました。変えるときは「編集モード」を押してから行います。',
+    ] },
+  { id: '2026-06-20-ipad-drag', date: '2026-06-20', tag: '改善', title: 'iPadでのドラッグをなめらかに',
+    items: [
+      'マグネットや 📋（コピー・移動）をドラッグしたときの、動きの遅れ・カクつきを減らしました。',
+      '現場の並べ替え（⋮⋮）で、ドラッグしたまま盤面の上下の端に近づけると自動でスクロールし、画面に見えていない位置へも移せるようにしました。',
+    ] },
+  { id: '2026-06-19-period', date: '2026-06-19', tag: '新機能', title: '工期の入力欄',
+    items: [
+      '現場名のすぐ下に工期の入力欄を付けました。現場を作ったあとからでも、工期（例: 5/4〜9/末）を書いたり直したりできます。',
+    ] },
+  { id: '2026-06-18-dropbox-folder', date: '2026-06-18', tag: '改善', title: 'Dropboxの保存先フォルダ名を変更',
+    items: [
+      '保存先を「★大田原工業　工事部」フォルダに変えました（接続済みの端末は自動で切り替わります）。',
+    ] },
+  { id: '2026-06-09-copy-keeps-notes', date: '2026-06-09', tag: '改善', title: 'コピー・移動でメモを消さないように',
+    items: [
+      '日・現場・マスのコピーや、マスの移動では、マグネット（人員・重機・車両）だけをコピー・移動するようにしました。',
+      'コピー先・移動先のマスに書いてあったメモ（先の予定など）は、上書きされずにそのまま残ります。',
+      'そのかわり、コピー元・移動元のマスのメモは一緒に移らず、元のマスに残ります。',
+    ] },
+  { id: '2026-06-03-note-style', date: '2026-06-03', tag: '新機能', title: 'マスのメモ欄の文字の大きさ・色',
+    items: [
+      'マスのメモ欄（各マスの下の欄と、右端の「備考」列）をタップすると、文字の大きさ（小・標準・大・特大）と色を変えるツールバーが出ます。マスごとに設定でき、他の端末でも同じように表示されます。',
+      'ツールバーは右端の × で閉じられます。出したくない端末は、⚙ 設定の「備考欄の書式ツールバー」でオフにできます（その端末だけの設定です）。',
+    ] },
+  { id: '2026-05-24-save-safety', date: '2026-05-24', tag: '修正', title: 'Dropboxのデータが空のときの安全対策',
+    items: [
+      'アプリを開いている間に他の端末の変更を自動で取り込むとき、Dropbox側のデータが空（現場が1つもない状態）になっていたら取り込まず、手元のボードをそのまま残すようにしました。',
+    ] },
+  { id: '2026-05-23-undo-help', date: '2026-05-23', tag: '新機能', title: '「↩ 戻る」・使い方ガイド・一覧のプルダウン',
+    items: [
+      '「↩ 戻る」で直前の操作を取り消せるようにしました。',
+      'ツールバーに「❓ ヘルプ」ボタンを追加しました。押すと使い方ガイド（目次つき）が開きます。',
+      '週間一覧のプルダウンで、その日の配置現場を変えられるようにしました。',
+      '月別集計で、現場名の左の ⋮⋮ をドラッグして現場を並べ替えられるようにしました。ボードの現場の並び順も同じように変わります。',
+      'マス右上の 📋 を同じ日の別の現場へドラッグすると「移動」になるようにしました（別の日へは今までどおり「コピー」）。',
+    ] },
+  { id: '2026-05-22-share-fix', date: '2026-05-22', tag: '修正', title: 'Dropbox共有の不具合を修正',
+    items: [
+      'Dropboxにつないでも、社員ごとに別々のボードになってしまう問題を直しました。',
+      '他の端末で変えた内容が、これまでより早く自分の画面に出るようにしました。',
+    ] },
+  { id: '2026-05-21-key-fix', date: '2026-05-21', tag: '修正', title: '工程表アプリと保存先を取り違える不具合を修正',
+    items: [
+      '同じ端末の同じブラウザで工程表アプリも使っていると、ボードの保存先が工程表アプリの保存先になってしまうことがある不具合を直しました。',
+    ] },
+  { id: '2026-05-19-team-share', date: '2026-05-19', tag: '改善', title: 'Dropboxで全社員が同じボードを共有',
+    items: [
+      'チームの共有フォルダに保存するようにし、各自が「Dropboxに接続」を押すだけで同じボードを編集できるようにしました。',
+    ] },
+  { id: '2026-05-18-tokutei-filter', date: '2026-05-18', tag: '改善', title: '「特定技能」の絞り込み',
+    items: [
+      'ツールバーと週間一覧に「特定技能」の絞り込みを追加しました。',
+    ] },
+  { id: '2026-05-16-auto-sync', date: '2026-05-16', tag: '新機能', title: '他の端末の変更が自動で反映',
+    items: [
+      '別の端末で変更すると、数秒で自分の画面にも反映されるようにしました。',
+      'iPad（Safari・Edge）で、Dropboxから最新の内容を読み込めない不具合を直しました。',
+    ] },
+  { id: '2026-05-15-basics', date: '2026-05-15', tag: '新機能', title: '基本の機能をまとめて追加',
+    items: [
+      'マスのマグネットとメモをまとめて消す🗑ボタン（編集モードのとき）と、同じ人・重機・車両を同じ日に二重に置いたときの確認',
+      '車両の絞り込み',
+      '人員の所属（大田原工業／ガーデンホームズ／その他）とメモ',
+      '「📊 月別」で、月ごとに現場別・所属別ののべ人数を集計',
+      '週間一覧で人員・重機・車両の表示切り替え、週送り、休み（赤）・研修（青）の色分け、マスごとのメモ',
+      '日付の見出しを会社の休日カレンダーどおりに色分け（日曜・祝日・会社の休日。出勤日の土曜日は色なし）と、人員の「特定技能」の区分（「特」マーク）',
+      'バックアップを選んだフォルダへ保存（💾ボタンと、変更があれば5分ごとの自動保存。PCのChrome・Edgeのみ）と、Dropboxへの保存が終わる前に閉じようとしたときの警告',
+    ] },
+  { id: '2026-05-14-launch', date: '2026-05-14', tag: 'お知らせ', title: '現場配置ボードを公開',
+    items: [
+      '現場ごとの作業員・重機・車両の配置を、週単位で管理できるボードを公開しました。',
+    ] },
+];
+const CHANGELOG_SEEN_KEY = 'genba_changelog_seen';     // この端末で最後に見た更新情報の id
+const CHANGELOG_TOAST_KEY = 'genba_changelog_toasted'; // 画面下のお知らせを最後に出した更新の id
+const CHANGELOG_TAG_CLASS = { '新機能': 't-new', '改善': 't-imp', '修正': 't-fix' };
+let _clToastTimer = null;
+
+// まだ見ていない更新情報（新しい順）。見た目印が無いときは「無し」扱い
+function changelogUnseen() {
+  let seen = null;
+  try { seen = localStorage.getItem(CHANGELOG_SEEN_KEY); } catch (e) { return []; }
+  const i = CHANGELOG.findIndex(e => e.id === seen);
+  if (i >= 0) return CHANGELOG.slice(0, i);
+  // 目印の項目が一覧から消えていた時は、id 先頭の日付より新しいものを新着とする（新着表示が止まらないように）
+  const d = String(seen || '').slice(0, 10);
+  return /^\d{4}-\d{2}-\d{2}$/.test(d) ? CHANGELOG.filter(e => e.date > d) : [];
+}
+
+function updateChangelogBadge() {
+  const n = changelogUnseen().length;
+  const btn = document.getElementById('changelog-btn');
+  if (btn) {
+    btn.classList.toggle('has-new', n > 0);
+    btn.title = n > 0 ? `アプリの更新情報（新しいお知らせ ${n}件）` : 'アプリの更新情報（何が変わったか）';
+  }
+  const pill = document.getElementById('changelog-menu-new');
+  if (pill) pill.classList.toggle('show', n > 0);
+}
+
+function openChangelog() {
+  const unseen = new Set(changelogUnseen().map(e => e.id));
+  const fmt = (d) => { const p = d.split('-').map(Number); return `${p[0]}年${p[1]}月${p[2]}日`; };
+  document.getElementById('changelog-list').innerHTML = CHANGELOG.map(e => {
+    const isNew = unseen.has(e.id);
+    return `<div class="cl-entry${isNew ? ' unseen' : ''}">` +
+      `<div class="cl-head"><span class="cl-date">${fmt(e.date)}</span>` +
+      `<span class="cl-tag ${CHANGELOG_TAG_CLASS[e.tag] || ''}">${escapeHtml(e.tag)}</span>` +
+      (isNew ? '<span class="cl-new-pill">NEW</span>' : '') + `</div>` +
+      `<div class="cl-title">${escapeHtml(e.title)}</div>` +
+      `<ul class="cl-items">${e.items.map(t => `<li>${escapeHtml(t)}</li>`).join('')}</ul></div>`;
+  }).join('');
+  try { localStorage.setItem(CHANGELOG_SEEN_KEY, CHANGELOG[0].id); } catch (e) {}
+  updateChangelogBadge();
+  hideChangelogToast();
+  document.getElementById('changelog-modal').classList.add('show');
+  document.getElementById('changelog-list').scrollTop = 0;
+}
+function closeChangelog() {
+  document.getElementById('changelog-modal').classList.remove('show');
+}
+document.getElementById('changelog-modal').addEventListener('click', (e) => {
+  if (e.target.id === 'changelog-modal') closeChangelog();
+});
+
+function showChangelogToast(unseen) {
+  const p = unseen[0].date.split('-').map(Number);
+  document.getElementById('changelog-toast-text').textContent =
+    `📢 アプリを更新しました（${p[1]}/${p[2]}）：${unseen[0].title}` + (unseen.length > 1 ? ` ほか${unseen.length - 1}件` : '');
+  document.getElementById('changelog-toast').style.display = '';
+  clearTimeout(_clToastTimer);
+  _clToastTimer = setTimeout(hideChangelogToast, 15000);
+}
+function hideChangelogToast() {
+  clearTimeout(_clToastTimer);
+  document.getElementById('changelog-toast').style.display = 'none';
+}
+
+(function initChangelog() {
+  try {
+    if (localStorage.getItem(CHANGELOG_SEEN_KEY) === null) {
+      // 更新情報ができる前から使っている端末（盤面のデータがある）には、最近2週間ぶんを新着として知らせる。
+      // はじめて開いた端末は全部見たことにする（前からある機能を「新着」と出しても意味がないため）
+      let base = CHANGELOG[0].id;
+      if (localStorage.getItem(STORAGE_KEY) !== null) {
+        const cutoff = addDays(todayStr(), -14);
+        const older = CHANGELOG.find(e => e.date < cutoff);
+        base = (older || CHANGELOG[CHANGELOG.length - 1]).id;
+      }
+      localStorage.setItem(CHANGELOG_SEEN_KEY, base);
+    }
+  } catch (e) {}
+  updateChangelogBadge();
+  const unseen = changelogUnseen();
+  if (!unseen.length) return;
+  // 画面下のお知らせは、同じ更新については1回だけ（あとは赤い印で知らせる）
+  try {
+    if (localStorage.getItem(CHANGELOG_TOAST_KEY) === CHANGELOG[0].id) return;
+    localStorage.setItem(CHANGELOG_TOAST_KEY, CHANGELOG[0].id);
+  } catch (e) { return; }
+  // 盤面の表示が落ち着いてから出す。出す時点で状態を見直す：
+  // その間に 📢 で読んでいたら出さない／設定などの画面が開いている間は、閉じるまで待つ（下に隠れたまま消えないように）
+  setTimeout(function tryShowToast() {
+    const u = changelogUnseen();
+    if (!u.length) return;
+    if (document.querySelector('.modal-bg.show, .pdf-viewer.show')) { setTimeout(tryShowToast, 3000); return; }
+    showChangelogToast(u);
+  }, 1500);
+})();
 
 function renderListTable() {
   const tbl = document.getElementById('list-table');
