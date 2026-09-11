@@ -559,6 +559,26 @@
     font-weight: bold;
   }
   .day-total.zero { color: #aaa; font-weight: normal; }
+  /* 曜日見出しの集計行：「計○人」と「○現場」（その日の稼働現場数）を横に並べる */
+  .day-sums {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 2px 6px;
+    margin-top: 2px;
+  }
+  .day-sums .day-total { margin-top: 0; }
+  .day-sites {
+    font-size: 11px;
+    font-weight: bold;
+    color: #2b3a4a;
+    background: rgba(43,58,74,0.10);
+    border-radius: 8px;
+    padding: 0 6px;
+    line-height: 16px;
+    white-space: nowrap;
+  }
 
   /* ===== 今日の列（見出しの枠＋「今日」バッジ＋列のマスを薄いオレンジに） =====
      見出しの休日色（日曜赤・祝日青など）はそのまま残し、枠とバッジで今日を示す */
@@ -668,6 +688,9 @@
     border-radius: 4px; cursor: pointer; font-size: 13px;
   }
   .site-archive-row .hint, .site-memo-row .hint { display: block; font-size: 11px; color: #999; margin-top: 5px; line-height: 1.5; }
+  .site-work-label { display: flex; align-items: center; gap: 8px; font-size: 13px; cursor: pointer; }
+  /* .modal input の幅100%・余白を打ち消す */
+  .modal .site-work-label input { width: 20px; height: 20px; margin: 0; padding: 0; flex-shrink: 0; }
 
   /* ===== 現場メモ（注意事項・PDF資料）モーダル ===== */
   .modal.site-memo-modal { width: 560px; max-width: 94vw; min-width: 0; }
@@ -2269,6 +2292,11 @@
       <button type="button" onclick="openSiteMemoFromPicker()">📝 現場メモ（注意事項・PDF）</button>
       <span class="hint">朝礼の時間・搬入の制限・連絡先などの注意事項や、施工計画書・図面のPDFを登録します。</span>
     </div>
+    <!-- 現場のみ：曜日見出しの「○現場」（その日の稼働現場数）に数えるか -->
+    <div id="site-work-row" class="site-memo-row" style="display:none">
+      <label class="site-work-label"><input type="checkbox" id="site-work-check" onchange="setSiteWorkCount(this.checked)"> 見出しの「○現場」（その日の稼働現場数）に数える</label>
+      <span class="hint" id="site-work-hint"></span>
+    </div>
     <!-- 現場のみ：完了（盤面から非表示）／復帰 -->
     <div id="site-archive-row" class="site-archive-row" style="display:none">
       <button id="site-archive-btn" onclick="toggleSiteArchive()"></button>
@@ -2596,6 +2624,7 @@
         <li><strong>右側のプール</strong>：まだ配置していないマグネット（人・重機・車両）の置き場です。</li>
         <li>各マスの<strong>左上の青い数字</strong>はその日その現場の人数、<strong>下の欄</strong>はメモです。</li>
         <li><strong>オレンジ色の列</strong>が今日です（見出しに「今日」と出ます）。今日を含まない週を見ているときは出ません。</li>
+        <li>曜日の見出しには、その日の<strong>人数（計○人）</strong>と<strong>稼働現場数（○現場）</strong>が出ます（16章）。</li>
         <li>現場名の下の<strong>黄色い付箋（📝）</strong>は、その現場の注意事項・PDF資料です。タップすると中身を見られます（9章）。</li>
         <li>完了にした現場が1つでもあると、ツールバーに <span class="hk">✅ 完了現場 ○</span> ボタンが出ます（0件のときは出ません）。スマホは <span class="hk">︙</span> メニューの中にあります（6章）。</li>
         <li>Dropbox接続中は、ツールバーの下に「今どの端末が操作中か」（在席バー）が表示されます（18章）。</li>
@@ -2649,6 +2678,7 @@
       <ul>
         <li><strong>追加</strong>：<span class="hk">＋現場</span> を押し、現場名 → 期間（任意）を入力します。</li>
         <li><strong>名前・色を変える</strong>：<span class="hk">編集モード</span>（7章）をONにして現場名をタップすると、設定画面で名前と色をまとめて変更できます。</li>
+        <li><strong>稼働現場数に数えるか</strong>：同じ設定画面の「見出しの『○現場』（その日の稼働現場数）に数える」のチェックで切り替えます。「休み・研修」と、名前が「事務所」「置場」で終わる現場は、最初から数えない設定です（16章）。</li>
         <li><strong>削除</strong>：<span class="hk">編集モード</span>をONにして、現場名の右の赤い <strong>×</strong> を押します（配置データも消えます）。</li>
         <li><strong>並べ替え</strong>：<span class="hk">編集モード</span>で、現場名の左の <span class="hk">⋮⋮</span> を上下にドラッグします。</li>
       </ul>
@@ -2809,6 +2839,7 @@
       <h3 id="help-16">16. 色とマークの意味</h3>
       <ul>
         <li><strong>青い数字（マス左上）</strong>：その日その現場の人数。曜日見出しの「計○人」はその日の合計です（「完了」にした現場の人数と、協力業者は入りません）。</li>
+        <li><strong>見出しの「○現場」</strong>：その日の<strong>稼働現場数</strong>です。人（協力業者を含む）が1人以上入っている現場を数えます。重機・車両だけの現場、「休み・研修」、名前が「事務所」「置場」で終わる現場、「完了」にした現場は数えません。数えるかどうかは現場ごとに変えられます（6章）。PCでは「○現場」にマウスを乗せると、数えた現場の一覧が出ます。</li>
         <li><strong>実 / 特 / 協 バッジ</strong>：マグネット左の黒丸。実＝実習生、特＝特定技能、協＝協力業者（青いマグネット・会社単位）。</li>
         <li><strong>右下の丸ドット</strong>：所属マーク。緑＝ガーデンホームズ、茶＝その他。</li>
         <li><strong>曜日の色</strong>：日曜＝赤、祝日＝青地に赤字、会社休＝青、健康診断＝緑。</li>
@@ -3476,16 +3507,11 @@ function renderGrid() {
     const dateStr = addDays(state.weekStart, i);
     const dow = dayOfWeek(dateStr);
     const bgCls = dateBgClass(dateStr);
-    let dayTotal = 0;
-    visibleSites.forEach(s => {
-      const c = state.schedule[s.id] && state.schedule[s.id][dateStr];
-      if (c && c.magnets) dayTotal += c.magnets.filter(countsAsHeadcount).length;
-    });
-    const totalHtml = dayTotal > 0 ? `<span class="day-total">計${dayTotal}人</span>` : '';
     const head = document.createElement('div');
     head.className = 'head' + (bgCls ? ' ' + bgCls : '');
     head.dataset.date = dateStr;
-    head.innerHTML = `<span class="day-name">${DAYS_JP[dow]}</span><span class="day-num">${new Date(dateStr).getDate()}</span>${totalHtml}<button class="day-copy-btn" title="タップ：複数選択コピー / ドラッグ：別日へコピー">📋</button>`;
+    head.innerHTML = `<span class="day-name">${DAYS_JP[dow]}</span><span class="day-num">${new Date(dateStr).getDate()}</span><button class="day-copy-btn" title="タップ：複数選択コピー / ドラッグ：別日へコピー">📋</button>`;
+    renderDaySums(head, dateStr); // 計○人・○現場
     const btn = head.querySelector('.day-copy-btn');
     const dayLabel = `${DAYS_JP[dow]}曜 ${new Date(dateStr).getMonth()+1}/${new Date(dateStr).getDate()} の配置`;
     makeCopyDraggable(btn, 'day', dateStr, dayLabel, () => openDayCopy(dateStr));
@@ -3926,28 +3952,47 @@ function updateHeadcounts() {
   });
   for (let i = 0; i < 7; i++) {
     const dateStr = addDays(state.weekStart, i);
-    let total = 0;
-    state.sites.forEach(s => {
-      if (s.archived) return;   // 完了現場は盤面に出ていないので日計にも入れない
-      const c = state.schedule[s.id] && state.schedule[s.id][dateStr];
-      if (c && c.magnets) total += c.magnets.filter(countsAsHeadcount).length;
-    });
-    const head = document.querySelector(`.head[data-date="${dateStr}"]`);
-    if (!head) continue;
-    let totalEl = head.querySelector('.day-total');
-    if (total > 0) {
-      if (!totalEl) {
-        totalEl = document.createElement('span');
-        totalEl.className = 'day-total';
-        const copyBtn = head.querySelector('.day-copy-btn');
-        if (copyBtn) head.insertBefore(totalEl, copyBtn);
-        else head.appendChild(totalEl);
-      }
-      totalEl.textContent = `計${total}人`;
-    } else if (totalEl) {
-      totalEl.remove();
-    }
+    const head = document.querySelector(`#grid .head[data-date="${dateStr}"]`);
+    if (head) renderDaySums(head, dateStr);
   }
+}
+
+// ========== 日ごとの集計（曜日見出しの「計○人」「○現場」） ==========
+// ○現場＝その日の稼働現場数：人（協力業者を含む）が1人以上入っている現場の数。重機・車両だけの現場は数えない。
+// 数えない現場：休み・研修の枠（一覧・月別と同じ判定）、名前が「事務所」「置場」で終わるもの、完了現場。
+// 名前では決めきれない現場は、設定画面の「○現場に数える」で現場ごとに上書きできる（site.workSite）。
+function autoWorkSite(site) {
+  const name = String(site.name || '').trim();
+  return !/休み|研修/.test(name) && !/(事務所|置場)$/.test(name);
+}
+function isWorkSite(site) {
+  return typeof site.workSite === 'boolean' ? site.workSite : autoWorkSite(site);
+}
+function daySummary(dateStr) {
+  let people = 0;          // 計○人（従来どおり：協力業者は数えない）
+  const workSites = [];    // 稼働現場の名前
+  state.sites.forEach(s => {
+    if (s.archived) return; // 完了現場は盤面に出ていないので日計にも入れない
+    const c = state.schedule[s.id] && state.schedule[s.id][dateStr];
+    const ms = (c && c.magnets) || [];
+    people += ms.filter(countsAsHeadcount).length;
+    if (isWorkSite(s) && ms.some(m => m.type === 'person')) workSites.push(s.name);
+  });
+  return { people, workSites };
+}
+function renderDaySums(head, dateStr) {
+  const { people, workSites } = daySummary(dateStr);
+  let box = head.querySelector('.day-sums');
+  if (!people && !workSites.length) { if (box) box.remove(); return; }
+  if (!box) {
+    box = document.createElement('span');
+    box.className = 'day-sums';
+    head.insertBefore(box, head.querySelector('.day-copy-btn'));
+  }
+  box.innerHTML = (people ? `<span class="day-total">計${people}人</span>` : '') +
+    (workSites.length ? `<span class="day-sites">${workSites.length}現場</span>` : '');
+  const sitesEl = box.querySelector('.day-sites');
+  if (sitesEl) sitesEl.title = `稼働現場 ${workSites.length}か所\n` + workSites.join('\n');
 }
 
 function deleteMagnetFromCell(magnetEl) {
@@ -4256,6 +4301,31 @@ function openSiteMemo(siteId) {
   document.getElementById('sm-text').value = _smBaseText;
   refreshSiteMemoModal();
   document.getElementById('site-memo-modal').classList.add('show');
+}
+
+// 現場の設定画面の「見出しの『○現場』に数える」チェックの表示
+function updateSiteWorkRow(site) {
+  document.getElementById('site-work-check').checked = isWorkSite(site);
+  const auto = autoWorkSite(site);
+  const manual = typeof site.workSite === 'boolean' && site.workSite !== auto;
+  document.getElementById('site-work-hint').textContent = manual
+    ? (site.workSite ? '手動で「数える」にしています。' : '手動で「数えない」にしています。')
+      + `（チェックを${site.workSite ? '外す' : '入れる'}と、名前から判断する元の設定に戻ります）`
+    : (auto
+      ? '人が1人でも入っている日に数えます（協力業者だけの日も数えます）。事務所・置場など工事の現場でないときはチェックを外してください。'
+      : '名前（休み・研修／「事務所」「置場」で終わる）から、工事の現場ではないと判断して数えていません。');
+}
+
+// チェックの切り替え。名前から判断した設定と同じになったら上書きを消す（データを増やさない）
+function setSiteWorkCount(on) {
+  if (!colorPickerTarget || colorPickerTarget.type !== 'site') return;
+  const site = state.sites.find(s => s.id === colorPickerTarget.label);
+  if (!site) return;
+  if (on === autoWorkSite(site)) delete site.workSite;
+  else site.workSite = on;
+  saveState();
+  render();
+  updateSiteWorkRow(site);
 }
 
 // 現場の設定画面（編集モードで現場名タップ）の「📝 現場メモ」から開く
@@ -5329,6 +5399,12 @@ function openColorPicker(type, label, viewOnly) {
   // 現場メモを開くボタン ─ 現場のみ（編集モード）
   document.getElementById('site-memo-row').style.display = (type === 'site' && !viewOnly) ? '' : 'none';
 
+  // 稼働現場数に数えるか ─ 現場のみ（編集モード）
+  const workRow = document.getElementById('site-work-row');
+  const workSiteObj = type === 'site' && !viewOnly ? state.sites.find(s => s.id === label) : null;
+  workRow.style.display = workSiteObj ? '' : 'none';
+  if (workSiteObj) updateSiteWorkRow(workSiteObj);
+
   // 完了（アーカイブ）ボタン ─ 現場のみ表示
   const archRow = document.getElementById('site-archive-row');
   if (type === 'site' && !viewOnly) {
@@ -5386,6 +5462,7 @@ function applyRename() {
     render();
     const preview = document.querySelector('#color-target .preview-magnet');
     if (preview) preview.textContent = newName;
+    updateSiteWorkRow(site); // 名前で「事務所・置場」かどうかが変わることがある
     return;
   }
 
