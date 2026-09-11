@@ -415,6 +415,53 @@
   body.edit-mode .site-del { display: inline-flex; align-items: center; justify-content: center; }
   body.edit-mode .site-name-inner { background: #fff8dc; padding: 2px 4px; border-radius: 3px; }
 
+  /* 現場メモ（注意事項・PDF）の入口。現場名・工期の下に出す付箋 */
+  .site-memo-btn {
+    display: flex;
+    align-items: flex-start;
+    gap: 3px;
+    width: 100%;
+    margin-top: 3px;
+    padding: 2px 4px;
+    font: inherit;
+    font-size: 10.5px;
+    line-height: 1.35;
+    text-align: left;
+    border-radius: 3px;
+    cursor: pointer;
+  }
+  .site-memo-btn.has-memo {
+    background: #fef9c3;
+    color: #713f12;
+    border: 1px solid #fde68a;
+    border-left: 3px solid #eab308;
+  }
+  .site-memo-btn.empty {
+    background: transparent;
+    color: #9a9a9a;
+    border: 1px dashed #cfcdbf;
+  }
+  .site-name.has-color .site-memo-btn.empty { color: inherit; opacity: 0.7; border-color: currentColor; }
+  .site-memo-btn .sm-text {
+    flex: 1;
+    min-width: 0;
+    word-break: break-all;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  .site-memo-btn .sm-clip { flex-shrink: 0; font-weight: bold; white-space: nowrap; }
+  /* 編集モードは ⋮⋮・📋・× が並んで現場名の幅が狭い。付箋は1行に収めて行の高さを変えない */
+  body.edit-mode .site-memo-btn { white-space: nowrap; }
+  body.edit-mode .site-memo-btn .sm-text { display: block; white-space: nowrap; text-overflow: ellipsis; }
+  @media (max-width: 1024px) {
+    /* iPad縦などでは現場名の幅が約60pxしかない。空の「＋ メモ・PDF」は出さず（現場名タップの設定画面から開く）、
+       中身のある付箋も 📝・📎 だけにする（全文は閲覧モードの付箋か、タップして開くメモで見る） */
+    body.edit-mode .site-memo-btn.empty,
+    body.edit-mode .site-memo-btn .sm-text { display: none; }
+  }
+
   .cell {
     background: white;
     border: 1px solid #e2e0d2;
@@ -513,6 +560,27 @@
   }
   .day-total.zero { color: #aaa; font-weight: normal; }
 
+  /* ===== 今日の列（見出しの枠＋「今日」バッジ＋列のマスを薄いオレンジに） =====
+     見出しの休日色（日曜赤・祝日青など）はそのまま残し、枠とバッジで今日を示す */
+  .head.today { box-shadow: inset 0 0 0 3px #fb923c; }
+  .head.today::before {
+    content: '今日';
+    position: absolute;
+    top: 4px;
+    left: 4px;
+    background: #f97316;
+    color: #fff;
+    font-size: 10px;
+    font-weight: bold;
+    line-height: 1;
+    padding: 3px 6px;
+    border-radius: 8px;
+  }
+  .cell.today {
+    background: #ffedd5;
+    box-shadow: inset 2px 0 0 #fb923c, inset -2px 0 0 #fb923c;
+  }
+
   /* ===== Dropbox status & settings ===== */
   .dbx-status {
     display: inline-flex;
@@ -594,12 +662,143 @@
   .archived-item button.danger { color: #dc2626; border-color: #f0b4b4; }
   .archived-empty { color: #999; font-size: 13px; padding: 14px 2px; line-height: 1.6; }
   /* 現場設定モーダル内の「完了にする」行 */
-  .site-archive-row { margin: 10px 0; padding: 8px 0; border-top: 1px solid #eee; }
-  .site-archive-row button {
+  .site-archive-row, .site-memo-row { margin: 10px 0; padding: 8px 0; border-top: 1px solid #eee; }
+  .site-archive-row button, .site-memo-row button {
     padding: 7px 12px; border: 1px solid #ccc; background: #fff;
     border-radius: 4px; cursor: pointer; font-size: 13px;
   }
-  .site-archive-row .hint { display: block; font-size: 11px; color: #999; margin-top: 5px; line-height: 1.5; }
+  .site-archive-row .hint, .site-memo-row .hint { display: block; font-size: 11px; color: #999; margin-top: 5px; line-height: 1.5; }
+
+  /* ===== 現場メモ（注意事項・PDF資料）モーダル ===== */
+  .modal.site-memo-modal { width: 560px; max-width: 94vw; min-width: 0; }
+  .site-memo-modal.drag-over { outline: 3px dashed #2563eb; outline-offset: -6px; }
+  .sm-site-name { font-size: 15px; font-weight: bold; color: #2b3a4a; margin-bottom: 6px; word-break: break-all; }
+  .sm-section { padding: 10px 0; border-top: 1px solid #eee; }
+  .sm-label { font-size: 12px; font-weight: bold; color: #555; margin-bottom: 6px; }
+  .sm-count { font-weight: normal; color: #888; margin-left: 4px; }
+  .sm-textarea {
+    display: block;
+    width: 100%;
+    min-height: 130px;
+    padding: 8px 10px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font: inherit;
+    font-size: 14px;
+    line-height: 1.6;
+    resize: vertical;
+    -webkit-user-select: text;
+    user-select: text;
+  }
+  .sm-textarea:focus { outline: none; border-color: #2563eb; }
+  .sm-text-view {
+    font-size: 14px;
+    line-height: 1.7;
+    white-space: pre-wrap;
+    word-break: break-all;
+    background: #fef9c3;
+    border-left: 3px solid #eab308;
+    border-radius: 3px;
+    padding: 8px 10px;
+    max-height: 40vh;
+    overflow-y: auto;
+    -webkit-user-select: text;
+    user-select: text;
+  }
+  .sm-text-view:empty { background: #f6f6f2; border-left-color: #ddd; }
+  .sm-text-view:empty::before { content: '（記入なし）'; color: #999; }
+  .sm-files { display: flex; flex-direction: column; gap: 6px; }
+  .sm-file { display: flex; align-items: stretch; gap: 6px; }
+  .modal .sm-file-open {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 10px;
+    text-align: left;
+    background: #f7f8fa;
+    border: 1px solid #d6dbe1;
+    border-radius: 6px;
+    font-size: 13px;
+  }
+  .modal .sm-file-open:hover, .modal .sm-file-open:active { background: #eaf1fb; border-color: #2563eb; }
+  .sm-file-ico { font-size: 18px; flex-shrink: 0; }
+  .sm-file-body { display: flex; flex-direction: column; min-width: 0; }
+  .sm-file-name { font-weight: bold; color: #1f3a5f; word-break: break-all; }
+  .sm-file-meta { font-size: 11px; color: #888; margin-top: 1px; }
+  .sm-file.uploading { align-items: center; gap: 8px; padding: 8px 10px; border: 1px dashed #b7c3d0; border-radius: 6px; background: #fbfcfd; font-size: 13px; }
+  .modal .sm-file-del {
+    flex-shrink: 0;
+    width: 40px;
+    padding: 0;
+    font-size: 16px;
+    color: #d33;
+    border-color: #f0b4b4;
+  }
+  .sm-empty { font-size: 12px; color: #999; padding: 4px 0; }
+  .sm-add-row { margin-top: 8px; }
+  .modal .sm-add-btn { width: 100%; border: 2px dashed #9aa6b2; background: #fff; color: #2b3a4a; font-weight: bold; }
+  .modal .sm-add-btn:disabled { opacity: 0.45; cursor: default; }
+  .sm-note { font-size: 11px; color: #888; margin-top: 6px; line-height: 1.6; }
+  .sm-note.warn { color: #b45309; }
+
+  /* ===== PDFビューア（アプリ内で全ページ表示） ===== */
+  .pdf-viewer {
+    position: fixed;
+    inset: 0;
+    z-index: 300;
+    display: none;
+    flex-direction: column;
+    background: #525659;
+  }
+  .pdf-viewer.show { display: flex; }
+  .pv-bar {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 6px;
+    padding: 8px 10px;
+    background: #2b3a4a;
+    color: #fff;
+    flex-shrink: 0;
+  }
+  .pv-title { flex: 1 1 160px; min-width: 0; font-size: 14px; font-weight: bold; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .pv-bar button, .pv-bar .pv-open {
+    padding: 7px 11px;
+    min-height: 36px;
+    border: 1px solid rgba(255,255,255,0.3);
+    background: rgba(255,255,255,0.1);
+    color: #fff;
+    border-radius: 6px;
+    font-size: 13px;
+    cursor: pointer;
+    white-space: nowrap;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+  }
+  .pv-bar button:active, .pv-bar .pv-open:active { background: rgba(255,255,255,0.25); }
+  .pv-bar .pv-open.disabled { opacity: 0.35; pointer-events: none; }
+  .pv-bar .pv-close { background: #ff6b6b; border-color: #ff6b6b; font-weight: bold; }
+  .pv-zoom { min-width: 44px; text-align: center; font-size: 13px; font-variant-numeric: tabular-nums; }
+  /* 縦スクロールバーは常に出す（ページが並んだ後にバーが出て幅が縮み、横スクロールが出てしまうのを防ぐ） */
+  .pv-body { flex: 1; overflow-x: auto; overflow-y: scroll; -webkit-overflow-scrolling: touch; padding: 12px 8px 40px; outline: none; }
+  .pv-page { position: relative; margin: 0 auto 12px; background: #fff; box-shadow: 0 2px 8px rgba(0,0,0,0.45); }
+  .pv-page canvas { display: block; width: 100%; height: 100%; }
+  .pv-page::after {
+    content: attr(data-no);
+    position: absolute;
+    right: 6px;
+    bottom: 6px;
+    font-size: 11px;
+    color: #fff;
+    background: rgba(0,0,0,0.5);
+    padding: 1px 7px;
+    border-radius: 8px;
+    pointer-events: none;
+  }
+  .pv-msg { color: #fff; text-align: center; padding: 60px 20px; font-size: 14px; line-height: 1.8; white-space: pre-line; }
   .settings-modal .modal { min-width: 420px; max-width: 90vw; }
   .settings-section {
     padding: 12px 0;
@@ -1596,6 +1795,17 @@
   .list-table th.col-blue-red { background: #bbdefb; color: #d33; }
   .list-table th.col-blue-black { background: #bbdefb; }
   .list-table th.col-green { background: #c8e6c9; }
+  .list-table th.today { box-shadow: inset 0 -4px 0 #fb923c; }
+  .list-table th .today-tag {
+    display: inline-block;
+    background: #f97316;
+    color: #fff;
+    font-size: 10px;
+    padding: 1px 6px;
+    border-radius: 8px;
+    margin-left: 3px;
+    vertical-align: 1px;
+  }
   .list-table td.name {
     background: #fafaf4;
     position: sticky;
@@ -1852,9 +2062,14 @@
       -webkit-print-color-adjust: exact !important;
       print-color-adjust: exact !important;
     }
-    .toolbar, .pool, .modal-bg, .note-toolbar { display: none !important; }
+    .toolbar, .pool, .modal-bg, .note-toolbar, .pdf-viewer { display: none !important; }
     .site-drag-handle, .site-copy-handle, .day-copy-btn,
-    .cell-copy-handle, .cell-reset-btn, .magnet .del { display: none !important; }
+    .cell-copy-handle, .cell-reset-btn, .magnet .del, .site-memo-btn.empty { display: none !important; }
+    /* 配布用の週間表なので「今日」の色付けは印刷しない */
+    .head.today { box-shadow: none !important; }
+    .head.today::before { display: none !important; }
+    .cell.today { background: white !important; box-shadow: none !important; }
+    .site-memo-btn { font-size: 7.5px !important; padding: 1px 2px !important; margin-top: 1px !important; }
     .app { display: block !important; height: auto !important; }
     .main { display: block !important; overflow: visible !important; }
     .grid-wrap { overflow: visible !important; height: auto !important; }
@@ -2049,6 +2264,11 @@
       <input type="search" id="qual-filter" class="qual-filter" placeholder="資格名で絞り込み..." style="display:none" oninput="renderQualEditList()" />
       <div id="qual-edit" class="qual-edit" style="display:none"></div>
     </div>
+    <!-- 現場のみ：現場メモ（注意事項・PDF）を開く。盤面の「＋ メモ・PDF」が出ない狭い画面でもここから開ける -->
+    <div id="site-memo-row" class="site-memo-row" style="display:none">
+      <button type="button" onclick="openSiteMemoFromPicker()">📝 現場メモ（注意事項・PDF）</button>
+      <span class="hint">朝礼の時間・搬入の制限・連絡先などの注意事項や、施工計画書・図面のPDFを登録します。</span>
+    </div>
     <!-- 現場のみ：完了（盤面から非表示）／復帰 -->
     <div id="site-archive-row" class="site-archive-row" style="display:none">
       <button id="site-archive-btn" onclick="toggleSiteArchive()"></button>
@@ -2234,6 +2454,48 @@
   </div>
 </div>
 
+<!-- 現場メモ（注意事項・PDF資料）。閲覧モードでは見るだけ、編集モードで記入・PDF追加 -->
+<div id="site-memo-modal" class="modal-bg">
+  <div class="modal site-memo-modal">
+    <div class="modal-header">
+      <h2>📝 現場メモ</h2>
+      <button class="close-btn" onclick="closeSiteMemo()">×</button>
+    </div>
+    <div id="sm-site-name" class="sm-site-name"></div>
+    <div class="sm-section">
+      <div class="sm-label">注意事項・メモ</div>
+      <textarea id="sm-text" class="sm-textarea" rows="6" placeholder="例：朝礼 7:50／近隣に保育園あり 8:00〜8:30 は搬入不可／監督 ○○さんの連絡先 など"></textarea>
+      <div id="sm-text-view" class="sm-text-view"></div>
+    </div>
+    <div class="sm-section">
+      <div class="sm-label">PDF資料<span id="sm-file-count" class="sm-count"></span></div>
+      <div id="sm-files" class="sm-files"></div>
+      <div id="sm-add-row" class="sm-add-row">
+        <button type="button" id="sm-add-btn" class="sm-add-btn" onclick="pickSiteFiles()">＋ PDFを追加</button>
+        <input type="file" id="sm-file-input" accept="application/pdf,.pdf" multiple style="display:none">
+      </div>
+      <div id="sm-note" class="sm-note"></div>
+    </div>
+    <div class="modal-actions">
+      <button onclick="closeSiteMemo()">閉じる</button>
+    </div>
+  </div>
+</div>
+
+<!-- PDFビューア（pdf.js でアプリ内に全ページを描画。iPad・ホーム画面アプリでも同じように見られる） -->
+<div id="pdf-viewer" class="pdf-viewer">
+  <div class="pv-bar">
+    <span id="pv-title" class="pv-title"></span>
+    <button onclick="pdfZoom(-1)" title="縮小">－</button>
+    <span id="pv-zoom" class="pv-zoom">100%</span>
+    <button onclick="pdfZoom(1)" title="拡大">＋</button>
+    <button onclick="pdfZoom(0)" title="画面の幅に合わせる">幅に合わせる</button>
+    <a id="pv-open" class="pv-open disabled" target="_blank" rel="noopener" title="ブラウザのPDF表示で開く（印刷・保存はこちら）">別タブで開く</a>
+    <button class="pv-close" onclick="closePdfViewer()">× 閉じる</button>
+  </div>
+  <div id="pv-body" class="pv-body" tabindex="-1"></div>
+</div>
+
 <div id="month-summary-modal" class="modal-bg">
   <div class="modal modal-large">
     <div class="modal-header">
@@ -2304,7 +2566,7 @@
         <a onclick="helpJump('help-6')">6. 現場を追加・編集・完了（非表示）・削除する</a>
         <a onclick="helpJump('help-7')">7. 閲覧モードと編集モード</a>
         <a onclick="helpJump('help-8')">8. コピー・移動機能</a>
-        <a onclick="helpJump('help-9')">9. メモ・工期を書く</a>
+        <a onclick="helpJump('help-9')">9. メモ・工期・現場メモ（注意事項・PDF）</a>
         <a onclick="helpJump('help-10')">10. 週間一覧で確認・変更する</a>
         <a onclick="helpJump('help-11')">11. 月別集計を見る</a>
         <a onclick="helpJump('help-12')">12. 色・名前・区分・保有資格</a>
@@ -2333,6 +2595,8 @@
         <li><strong>中央の表</strong>：縦が現場、横が曜日（月〜日）。1マスが「ある現場の、ある1日」です。</li>
         <li><strong>右側のプール</strong>：まだ配置していないマグネット（人・重機・車両）の置き場です。</li>
         <li>各マスの<strong>左上の青い数字</strong>はその日その現場の人数、<strong>下の欄</strong>はメモです。</li>
+        <li><strong>オレンジ色の列</strong>が今日です（見出しに「今日」と出ます）。今日を含まない週を見ているときは出ません。</li>
+        <li>現場名の下の<strong>黄色い付箋（📝）</strong>は、その現場の注意事項・PDF資料です。タップすると中身を見られます（9章）。</li>
         <li>完了にした現場が1つでもあると、ツールバーに <span class="hk">✅ 完了現場 ○</span> ボタンが出ます（0件のときは出ません）。スマホは <span class="hk">︙</span> メニューの中にあります（6章）。</li>
         <li>Dropbox接続中は、ツールバーの下に「今どの端末が操作中か」（在席バー）が表示されます（18章）。</li>
       </ul>
@@ -2421,6 +2685,7 @@
         <li>マグネットの配置・移動・並べ替え・外す（×）</li>
         <li>マス・日・現場のコピー／移動（📋）</li>
         <li>メモ・工期の入力</li>
+        <li>現場メモ（注意事項）の記入、PDF資料の追加・一覧から外す（9章）</li>
         <li>マグネット・現場名をタップして色／名前／区分／保有資格を変更</li>
         <li>現場の削除（赤い ×）・並べ替え（⋮⋮）、マスの一括クリア（🗑）、プールのマグネット追加・削除</li>
         <li>現場を「完了」にして隠す・盤面に戻す（6章）</li>
@@ -2439,12 +2704,23 @@
       <p style="color:#666;">※コピー・移動するのは<strong>マグネット（人・重機・車両）だけ</strong>です。各マスに記入したメモや「備考」欄に書いた文字は<strong>そのまま残ります</strong>（消えません・上書きされません）。<br>
         右端の「備考」欄に置いた重機・車両のマグネットも、1日分コピー・現場1週間分コピーでは変わりません。「備考」マスを狙って 📋 をドラッグしたときだけ入れ替わります。</p>
 
-      <h3 id="help-9">9. メモ・工期を書く</h3>
+      <h3 id="help-9">9. メモ・工期・現場メモ（注意事項・PDF）</h3>
       <ul>
         <li><span class="hk">編集モード</span>（7章）をONにすると、各マスの下の欄・右端の「備考」列・現場名の下の「工期」欄に、直接文字を入力できます。</li>
         <li>入力後、別の場所をタップすれば自動で保存されます。</li>
         <li>閲覧モードのときは、これらは読み取り専用（見るだけ）になります。</li>
       </ul>
+      <h4>現場メモ（注意事項・PDF資料）</h4>
+      <p>現場ごとに、ずっと変わらない注意事項（朝礼の時間・搬入の制限・近隣への配慮・連絡先など）と、PDFの資料（施工計画書・図面など）を登録できます。</p>
+      <ul>
+        <li><strong>書く・PDFを付ける</strong>：<span class="hk">編集モード</span>で、現場名の下の <span class="hk">＋ メモ・PDF</span> をタップします（iPadを縦にしているときなど画面が狭いときは出ないので、<strong>現場名をタップ</strong>して開く設定画面の <span class="hk">📝 現場メモ（注意事項・PDF）</span> から開きます。こちらはどの画面でも使えます）。「注意事項・メモ」の欄に書くと自動で保存されます。PDFは <span class="hk">＋ PDFを追加</span> で選びます（PCはこの画面へファイルをドラッグ＆ドロップしても追加できます）。</li>
+        <li><strong>見る</strong>：登録した現場は、現場名の下に<strong>黄色い付箋（📝）</strong>が出て、注意事項の書き出しが見えます。📎の数字はPDFの件数です。付箋をタップすると全文とPDFの一覧が開きます。<strong>閲覧モードでも見られます</strong>（書き換えはできません）。編集モードでは表の高さが変わらないよう付箋を1行に縮め、画面が狭いときは 📝・📎 の印だけにします。</li>
+        <li><strong>PDFを開く</strong>：一覧のPDFをタップすると、アプリの中で全ページを表示します。<span class="hk">－</span> <span class="hk">＋</span> で拡大・縮小、<span class="hk">幅に合わせる</span> で元の大きさに戻ります。印刷・保存したいときは <span class="hk">別タブで開く</span> を使ってください（ホーム画面に追加したiPadのアプリでは <span class="hk">共有・印刷</span> になり、プリントや「ファイル」への保存ができます）。</li>
+        <li><strong>一覧から外す</strong>：<span class="hk">編集モード</span>でPDFの右の <strong>×</strong> を押します。一覧から消えるだけで、Dropboxのファイルは残ります。</li>
+      </ul>
+      <div class="help-note">PDFは Dropbox の <strong>★現場配置ボード → 現場資料 → （現場名）</strong> フォルダに保存され、全社員の端末で見られます。PDFの追加・表示には <strong>Dropbox接続（13章）が必要</strong>です。注意事項の文字は接続していなくても書けます。<br>
+        ・PDFは1ファイル150MBまでです。アップロード中は、終わるまで閲覧モードに切り替えられません（PCでページを閉じようとすると確認が出ます）。<br>
+        ・現場資料フォルダのPDFをDropbox側で<strong>削除</strong>すると、アプリからは開けなくなります（「ファイルが見つかりません」と出ます）。そのときは一覧から外して、PDFを追加し直してください。フォルダやファイルの名前を変えたり移動したりしても、同じチームフォルダの中なら開けます。</div>
 
       <h3 id="help-10">10. 週間一覧で確認・変更する</h3>
       <p><span class="hk">📋 一覧</span> で、その週の配置を一覧表で確認できます。</p>
@@ -2536,6 +2812,8 @@
         <li><strong>実 / 特 / 協 バッジ</strong>：マグネット左の黒丸。実＝実習生、特＝特定技能、協＝協力業者（青いマグネット・会社単位）。</li>
         <li><strong>右下の丸ドット</strong>：所属マーク。緑＝ガーデンホームズ、茶＝その他。</li>
         <li><strong>曜日の色</strong>：日曜＝赤、祝日＝青地に赤字、会社休＝青、健康診断＝緑。</li>
+        <li><strong>オレンジの枠・列＋「今日」</strong>：今日の日付です。一覧表（10章）でも見出しに「今日」と出ます。PDF出力（15章）では色を付けません。</li>
+        <li><strong>黄色い付箋（📝）</strong>：現場名の下。その現場の注意事項・PDF資料があるという印です（📎＝PDFの件数）。</li>
         <li><strong>黄色いマス（一覧表）</strong>：その日はどの現場にも配置されていない（未配置）という印です。重機・車両の表では「—」が黄色で出ます。</li>
         <li><strong>赤いマス（一覧表）</strong>：同じ人が同じ日に複数の現場へ配置されている状態（重複）です。協力業者は会社単位なので対象外です。</li>
         <li><strong>完了（月別集計）</strong>：その現場は「完了」にして盤面から隠してある、という印です（6章）。</li>
@@ -2574,6 +2852,7 @@
         <li><strong>操作を間違えたとき</strong>：ツールバーの「↩ 戻る」ボタンで直前の操作を取り消せます（最大20回まで）。</li>
         <li><strong>他の人の変更が出てこない</strong>：⚙ でDropboxが「接続」になっているか確認してください。iPadはページを開き直すと最新になります。</li>
         <li><strong>表示が古い気がする</strong>：ページを再読み込み（更新）してください。</li>
+        <li><strong>現場メモのPDFが開けない</strong>：⚙ でDropboxが「接続」になっているか確認してください。PDFの表示にはインターネット接続も必要です。「ファイルが見つかりません」と出るときは、Dropboxの現場資料フォルダでPDFが削除されていないか確認し、必要なら追加し直してください。PDFの取得まではできて表示だけできないときは、ビューア上の <span class="hk">別タブで開く</span>（ホーム画面に追加したiPadのアプリでは <span class="hk">共有・印刷</span>）から開けます。</li>
         <li><strong>フォルダ保存ができない</strong>：フォルダへの保存はChrome / Edgeのみ対応です。Safari・Firefoxではダウンロードになります。</li>
         <li>重機・車両は、よく使うものが最初から登録されています。</li>
         <li>もしデータがおかしくなっても、バックアップ（14章）から復元できます。</li>
@@ -3080,6 +3359,7 @@ function render() {
   updateFilterButtons();
   updateLastEditorLabel();
   updateArchivedUI();
+  if (siteMemoTarget) refreshSiteMemoModal(); // 他端末の変更を取り込んだ時、開いている現場メモも追従
 }
 
 function applyFilterClass() {
@@ -3274,6 +3554,10 @@ function renderGrid() {
     periodInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') periodInput.blur(); });
     nameWrap.appendChild(periodInput);
 
+    // 現場メモ（注意事項・PDF）— 工期の下。中身があれば閲覧中も見える
+    const memoBtn = makeSiteMemoBtn(site);
+    if (memoBtn) nameWrap.appendChild(memoBtn);
+
     siteCell.appendChild(nameWrap);
 
     // Apply site color
@@ -3335,7 +3619,21 @@ function renderGrid() {
       render();
     },
   });
+
+  markToday();
 }
+
+// 今日の列に色を付ける（見出し＋その日のマス）。
+// 表示しっぱなしのiPadでも日付が変わったら付け替えるよう、描画とは別に定期確認する。
+let _todayMarked = '';
+function markToday() {
+  const t = todayStr();
+  _todayMarked = t;
+  document.querySelectorAll('#grid .head[data-date], #grid .cell[data-date]').forEach(el => {
+    el.classList.toggle('today', el.dataset.date === t);
+  });
+}
+setInterval(() => { if (todayStr() !== _todayMarked) markToday(); }, 60 * 1000);
 
 function makeCell(siteId, dateStr, rowCls) {
   const cell = document.createElement('div');
@@ -3872,11 +4170,642 @@ function updateArchivedUI() {
 }
 
 function toggleEditMode() {
+  // 現場メモのPDFアップロード中は閲覧モードに切り替えない（終わった時に board.json を書くため。閲覧中は書かない決まり）
+  if (editMode && _smUploading.length) {
+    alert('PDFをアップロード中です。終わってから閲覧モードに切り替えてください。');
+    return;
+  }
   editMode = !editMode;
   render();
   // 編集中フラグを他端末へ即反映（心拍を待たずに打つ）
   if (typeof presenceBeat === 'function') presenceBeat();
 }
+
+// ========== 現場メモ（注意事項・PDF資料） ==========
+// 注意事項は site.memo（文字列）、PDFは site.files = [{id, name, path, dbxId, size, at, by}] に持つ。
+// PDF本体は board.json に入れない（全端末が2秒ごとに取りに来るので重くなる・localStorageにも入り切らない）。
+// board.json と同じフォルダの「現場資料/<現場名>/」へ個別のファイルとして置き、board.json にはパスだけ残す。
+// 一覧から外しても Dropbox のファイルは消さない（↩戻る や他端末の古い保存で一覧に戻っても開けるように）。
+const SITE_FILE_MAX_BYTES = 150 * 1024 * 1024; // Dropbox files/upload の上限
+let siteMemoTarget = null;   // 開いている現場メモの現場ID
+let _smBaseText = '';        // テキスト欄に読み込んだ内容。これと違えば書きかけ
+let _smSaveTimer = null;
+let _smUploading = [];       // アップロード中 [{siteId, name, size}]
+
+function smNormalize(s) { return String(s || '').replace(/\s+$/, ''); }
+function fmtBytes(n) {
+  if (!(n >= 0)) return '';
+  if (n < 1024) return n + ' B';
+  if (n < 1024 * 1024) return Math.round(n / 1024) + ' KB';
+  return (n / 1024 / 1024).toFixed(1) + ' MB';
+}
+function fmtFileDate(ts) {
+  if (!ts) return '';
+  const d = new Date(ts);
+  return `${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()}`;
+}
+
+// 盤面の現場名の下に出す付箋。中身があれば閲覧中も出す（注意事項を見落とさない）。
+// 中身が無い現場は編集モードのときだけ「＋ メモ・PDF」を出す（幅1024px以下はCSSで隠し、現場名タップの設定画面から開く）。
+function makeSiteMemoBtn(site) {
+  const text = (site.memo || '').trim();
+  const nFiles = Array.isArray(site.files) ? site.files.length : 0;
+  if (!text && !nFiles && !editMode) return null;
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.dataset.siteId = site.id;
+  if (text || nFiles) {
+    btn.className = 'site-memo-btn has-memo';
+    const preview = text ? text.split(/\n+/).map(s => s.trim()).filter(Boolean).join(' ／ ') : 'PDF資料';
+    btn.innerHTML = `<span class="sm-ico">📝</span><span class="sm-text">${escapeHtml(preview)}</span>` +
+      (nFiles ? `<span class="sm-clip">📎${nFiles}</span>` : '');
+    btn.title = [text, nFiles ? `PDF資料 ${nFiles}件` : ''].filter(Boolean).join('\n');
+  } else {
+    btn.className = 'site-memo-btn empty';
+    btn.textContent = '＋ メモ・PDF';
+    btn.title = '注意事項やPDF資料を登録';
+  }
+  // 工期欄と同じく、ドラッグ操作に吸われないようにする。
+  // click は止めない（止めるとスマホの︙メニューが「外側タップで閉じる」を受け取れず、メモの上に残る）
+  ['pointerdown', 'mousedown', 'touchstart'].forEach(ev => btn.addEventListener(ev, (e) => e.stopPropagation()));
+  btn.addEventListener('click', () => {
+    if (Sortable.active) return;
+    openSiteMemo(site.id);
+  });
+  return btn;
+}
+
+// 付箋だけ差し替える（入力のたびに render() で表全体を作り直さない＝iPadで重くしない）
+function refreshSiteMemoBtn(siteId) {
+  const row = Array.from(document.querySelectorAll('#grid .site-row')).find(r => r.dataset.siteId === siteId);
+  const wrap = row && row.querySelector('.site-name-wrap');
+  if (!wrap) return;
+  const old = wrap.querySelector('.site-memo-btn');
+  if (old) old.remove();
+  const site = state.sites.find(s => s.id === siteId);
+  const btn = site ? makeSiteMemoBtn(site) : null;
+  if (btn) wrap.appendChild(btn);
+}
+
+function openSiteMemo(siteId) {
+  const site = state.sites.find(s => s.id === siteId);
+  if (!site) return;
+  closeMenu(); // ︙メニューが開いたままメモの上に重ならないように
+  siteMemoTarget = siteId;
+  _smBaseText = site.memo || '';
+  document.getElementById('sm-text').value = _smBaseText;
+  refreshSiteMemoModal();
+  document.getElementById('site-memo-modal').classList.add('show');
+}
+
+// 現場の設定画面（編集モードで現場名タップ）の「📝 現場メモ」から開く
+function openSiteMemoFromPicker() {
+  if (!colorPickerTarget || colorPickerTarget.type !== 'site') return;
+  const siteId = colorPickerTarget.label;
+  closeColorPicker();
+  openSiteMemo(siteId);
+}
+
+function closeSiteMemo() {
+  flushSiteMemoText();
+  document.getElementById('site-memo-modal').classList.remove('show');
+  document.querySelector('#site-memo-modal .site-memo-modal').classList.remove('drag-over');
+  siteMemoTarget = null;
+}
+
+// 開いている現場メモを state に合わせる（他端末の変更を取り込んだ時にも render() から呼ばれる）
+function refreshSiteMemoModal() {
+  const site = state.sites.find(s => s.id === siteMemoTarget);
+  if (!site) { closeSiteMemo(); return; } // 他の端末で現場ごと削除された
+  document.getElementById('sm-site-name').textContent = site.name;
+  const ta = document.getElementById('sm-text');
+  // 書きかけでなければ、他端末で直された内容に追従する（書きかけは上書きしない）
+  if (smNormalize(ta.value) === _smBaseText && (site.memo || '') !== _smBaseText) {
+    _smBaseText = site.memo || '';
+    ta.value = _smBaseText;
+  }
+  ta.style.display = editMode ? '' : 'none';   // 閲覧モードは読み取り専用の表示だけ
+  const view = document.getElementById('sm-text-view');
+  view.style.display = editMode ? 'none' : '';
+  view.textContent = site.memo || '';
+  document.getElementById('sm-add-row').style.display = editMode ? '' : 'none';
+  document.getElementById('sm-add-btn').disabled = !dbxToken;
+  renderSiteMemoFiles();
+}
+
+// 注意事項の保存。書き換えていないときは保存しない（他端末で直した内容を古い文面で上書きしないため）
+function flushSiteMemoText() {
+  if (_smSaveTimer) { clearTimeout(_smSaveTimer); _smSaveTimer = null; }
+  if (!siteMemoTarget || !editMode) return;
+  const v = smNormalize(document.getElementById('sm-text').value);
+  if (v === _smBaseText) return;
+  const site = state.sites.find(s => s.id === siteMemoTarget);
+  if (!site) return;
+  if (v) site.memo = v; else delete site.memo;
+  _smBaseText = v;
+  saveState();
+  refreshSiteMemoBtn(site.id);
+}
+
+function renderSiteMemoFiles() {
+  const box = document.getElementById('sm-files');
+  const site = state.sites.find(s => s.id === siteMemoTarget);
+  if (!box || !site) return;
+  const files = Array.isArray(site.files) ? site.files : [];
+  document.getElementById('sm-file-count').textContent = files.length ? `${files.length}件` : '';
+  let html = '';
+  files.forEach(f => {
+    const meta = [fmtBytes(f.size), fmtFileDate(f.at), f.by].filter(Boolean).join('・');
+    html += `<div class="sm-file">` +
+      `<button type="button" class="sm-file-open" data-act="open" data-file-id="${escapeHtml(f.id)}" title="タップで表示">` +
+      `<span class="sm-file-ico">📄</span><span class="sm-file-body"><span class="sm-file-name">${escapeHtml(f.name)}</span>` +
+      (meta ? `<span class="sm-file-meta">${escapeHtml(meta)}</span>` : '') + `</span></button>` +
+      (editMode ? `<button type="button" class="sm-file-del" data-act="remove" data-file-id="${escapeHtml(f.id)}" title="この一覧から外す">×</button>` : '') +
+      `</div>`;
+  });
+  _smUploading.filter(j => j.siteId === site.id).forEach(j => {
+    html += `<div class="sm-file uploading"><span class="sm-file-ico">⏳</span><span class="sm-file-body">` +
+      `<span class="sm-file-name">${escapeHtml(j.name)}</span><span class="sm-file-meta">アップロード中…（${fmtBytes(j.size)}）</span></span></div>`;
+  });
+  if (!html) {
+    html = `<div class="sm-empty">${editMode ? 'まだありません。「＋ PDFを追加」から登録できます（PCはこの画面へドラッグ＆ドロップでも追加できます）。' : 'PDF資料はありません。'}</div>`;
+  }
+  box.innerHTML = html;
+
+  const note = document.getElementById('sm-note');
+  note.className = 'sm-note';
+  if (!dbxToken) {
+    note.className = 'sm-note warn';
+    note.textContent = editMode
+      ? '⚠ PDFの追加・表示には Dropbox 接続が必要です（⚙ 設定 →「Dropboxに接続」）。注意事項の記入は接続なしでもできます。'
+      : (files.length ? '⚠ PDFを見るには Dropbox 接続が必要です（⚙ 設定 →「Dropboxに接続」）。' : '');
+  } else if (editMode) {
+    note.textContent = `PDFは Dropbox の「${siteFilesDir(site)}」に保存され、全端末で見られます。一覧から外しても Dropbox のファイルは残ります。`;
+  } else {
+    note.textContent = '';
+  }
+}
+
+function isPdfFile(f) { return !!f && (f.type === 'application/pdf' || /\.pdf$/i.test(f.name || '')); }
+
+// Dropbox のファイル名・フォルダ名に使えない文字を置き換える
+function dbxSafeName(s, fallback) {
+  let v = String(s || '').replace(/[\\/:*?"<>|\u0000-\u001f]/g, '_').trim().replace(/[.\s]+$/, '');
+  const chars = Array.from(v); // 文字（コードポイント）単位で数える。絵文字や「𠮷」を途中で切ると不正な名前になる
+  if (chars.length > 100) {
+    const m = v.match(/\.[A-Za-z0-9]{1,8}$/);
+    const ext = m ? m[0] : '';
+    v = chars.slice(0, 100 - ext.length).join('') + ext;
+  }
+  return v || fallback;
+}
+
+// PDFの置き場所: board.json と同じフォルダの「現場資料/<現場名>」
+function siteFilesDir(site) {
+  const i = dbxFilePath.lastIndexOf('/');
+  return (i > 0 ? dbxFilePath.slice(0, i) : '') + '/現場資料/' + dbxSafeName(site.name, site.id);
+}
+
+function pickSiteFiles() {
+  if (!editMode) return;
+  if (!dbxToken) { alert('PDFを保存するには Dropbox 接続が必要です（⚙ 設定 →「Dropboxに接続」）。'); return; }
+  document.getElementById('sm-file-input').click();
+}
+
+async function uploadSiteFiles(list) {
+  const siteId = siteMemoTarget;
+  if (!editMode || !siteId) return;
+  if (!dbxToken) { alert('PDFを保存するには Dropbox 接続が必要です（⚙ 設定 →「Dropboxに接続」）。'); return; }
+  const files = Array.from(list || []);
+  const notPdf = files.filter(f => !isPdfFile(f));
+  if (notPdf.length) alert('PDF以外のファイルは追加できません：\n' + notPdf.map(f => f.name).join('\n'));
+  for (const file of files.filter(isPdfFile)) {
+    if (file.size > SITE_FILE_MAX_BYTES) {
+      alert(`「${file.name}」は大きすぎます（${fmtBytes(file.size)}）。150MBまでのPDFにしてください。`);
+      continue;
+    }
+    const cur = state.sites.find(s => s.id === siteId);
+    if (!cur) break;
+    const job = { siteId, name: file.name, size: file.size };
+    _smUploading.push(job);
+    if (siteMemoTarget === siteId) renderSiteMemoFiles();
+    try {
+      const resp = await dbxApiCall(
+        'https://content.dropboxapi.com/2/files/upload',
+        { path: siteFilesDir(cur) + '/' + dbxSafeName(file.name, '資料.pdf'), mode: 'add', autorename: true, mute: true },
+        file
+      );
+      if (!resp || !resp.ok) {
+        const t = resp ? await resp.text().catch(() => '') : '';
+        throw new Error(`HTTP ${resp ? resp.status : '?'} ${t.slice(0, 160)}`);
+      }
+      const meta = await resp.json();
+      // アップロード中に他端末の変更で state が差し替わっていることがあるので、今の state から探し直して書く
+      const site = state.sites.find(s => s.id === siteId);
+      if (!site) throw new Error('現場が見つかりません（他の端末で削除された可能性があります）');
+      if (!Array.isArray(site.files)) site.files = [];
+      site.files.push({
+        id: genId(),
+        name: meta.name || file.name,
+        path: meta.path_display || meta.path_lower,
+        dbxId: meta.id || '', // Dropboxのファイルid。上のフォルダの名前が変わっても・移動しても同じファイルを指せる
+        size: meta.size != null ? meta.size : file.size,
+        at: Date.now(),
+        by: deviceName || '',
+      });
+      saveState();
+      refreshSiteMemoBtn(siteId);
+    } catch (e) {
+      alert(`「${file.name}」を保存できませんでした。\n${e && e.message ? e.message : e}`);
+    } finally {
+      _smUploading = _smUploading.filter(j => j !== job);
+      if (siteMemoTarget === siteId) renderSiteMemoFiles();
+    }
+  }
+}
+
+function removeSiteFile(fileId) {
+  if (!editMode) return;
+  const site = state.sites.find(s => s.id === siteMemoTarget);
+  const f = site && Array.isArray(site.files) ? site.files.find(x => x.id === fileId) : null;
+  if (!f) return;
+  if (!confirm(`「${f.name}」をこの現場の一覧から外しますか？\n\n※Dropboxの「現場資料」フォルダのファイルは消えずに残ります。`)) return;
+  site.files = site.files.filter(x => x.id !== fileId);
+  if (!site.files.length) delete site.files;
+  saveState();
+  refreshSiteMemoBtn(site.id);
+  renderSiteMemoFiles();
+}
+
+// 取得したPDFは少しの間だけ手元に置き、すぐ開き直すときは取り直さない。
+// 長く置くと、Dropbox側で同じ名前のまま差し替えた新しい版ではなく古い版を見せ続けるので、数分で取り直す。
+const SITE_FILE_CACHE_MS = 5 * 60 * 1000;
+const SITE_FILE_CACHE_MAX = 5;
+const _siteFileCache = new Map();    // キー（Dropboxのid か パス） -> { blob, url, at }。古い順に並ぶ
+const _siteFileInflight = new Map(); // キー -> 取得中の Promise（同じPDFを続けて開いても1回だけ取る）
+let _pvShownEntry = null;            // ビューアに表示中の取得結果（「別タブで開く」が参照中なので捨てない）
+
+function siteFileKey(f) { return f.dbxId || f.path; }
+
+// 手元の写しを捨てる。表示中のものは「別タブで開く」が切れないよう、ビューアを閉じるまで待ってから解放する
+function dropSiteFileEntry(key) {
+  const e = _siteFileCache.get(key);
+  if (!e) return;
+  _siteFileCache.delete(key);
+  if (e === _pvShownEntry) e.evicted = true;
+  else URL.revokeObjectURL(e.url);
+}
+function releaseShownEntry() {
+  const e = _pvShownEntry;
+  _pvShownEntry = null;
+  if (e && e.evicted) URL.revokeObjectURL(e.url);
+}
+
+async function fetchSiteFile(f) {
+  const key = siteFileKey(f);
+  const hit = _siteFileCache.get(key);
+  if (hit && Date.now() - hit.at < SITE_FILE_CACHE_MS) {
+    _siteFileCache.delete(key); // 最近使ったものを後ろへ（古い順に捨てるため）
+    _siteFileCache.set(key, hit);
+    return hit;
+  }
+  if (hit) dropSiteFileEntry(key);
+  if (_siteFileInflight.has(key)) return _siteFileInflight.get(key);
+  const task = (async () => {
+    const url = 'https://content.dropboxapi.com/2/files/download';
+    let resp = await dbxApiCall(url, { path: key }, null);
+    // id で見つからない時（Dropbox側で消して同じ名前で置き直した等）は、保存した時のパスでも探す
+    if (resp && (resp.status === 409 || resp.status === 400) && f.dbxId && f.path) {
+      resp = await dbxApiCall(url, { path: f.path }, null);
+    }
+    if (!resp) throw new Error('Dropboxに接続されていません。');
+    if (resp.status === 409) throw new Error('Dropboxにファイルが見つかりません。\n（Dropboxの「現場資料」フォルダで削除された可能性があります。PDFを追加し直してください）');
+    if (!resp.ok) throw new Error(`Dropboxから取得できませんでした（HTTP ${resp.status}）`);
+    const blob = new Blob([await resp.blob()], { type: 'application/pdf' });
+    const entry = { blob, url: URL.createObjectURL(blob), at: Date.now() };
+    dropSiteFileEntry(key);
+    _siteFileCache.set(key, entry);
+    while (_siteFileCache.size > SITE_FILE_CACHE_MAX) dropSiteFileEntry(_siteFileCache.keys().next().value); // メモリを食いすぎない
+    return entry;
+  })();
+  _siteFileInflight.set(key, task);
+  try { return await task; }
+  finally { if (_siteFileInflight.get(key) === task) _siteFileInflight.delete(key); }
+}
+
+async function openSiteFile(fileId) {
+  const site = state.sites.find(s => s.id === siteMemoTarget);
+  const f = site && Array.isArray(site.files) ? site.files.find(x => x.id === fileId) : null;
+  if (!f) return;
+  if (!dbxToken) { alert('PDFを見るには Dropbox 接続が必要です（⚙ 設定 →「Dropboxに接続」）。'); return; }
+  const seq = pvOpen(f.name);
+  try {
+    const entry = await fetchSiteFile(f);
+    if (seq !== _pvSeq) return; // 取得中に閉じられた／別のPDFを開いた
+    await pvShowDoc(entry, seq, f.name);
+  } catch (e) {
+    if (seq !== _pvSeq) return;
+    // ファイル自体は取れていれば、上のボタン（別タブで開く／共有・印刷）でブラウザやiPad標準の表示に任せられる
+    const a = document.getElementById('pv-open');
+    const canHandOff = _pvShownEntry && a.style.display !== 'none' && !a.classList.contains('disabled');
+    const hint = canHandOff ? `\n上の「${a.textContent}」から開いてください。` : '';
+    const msg = e && e.name === 'PasswordException'
+      ? 'パスワード付きのPDFはここでは表示できません。' + (hint || '\nDropboxアプリなどで開いてください。')
+      : 'PDFを開けませんでした。\n' + (e && e.message ? e.message : e) + hint;
+    pvMessage(msg);
+  }
+}
+
+(function initSiteMemo() {
+  const ta = document.getElementById('sm-text');
+  ta.addEventListener('input', () => {
+    if (_smSaveTimer) clearTimeout(_smSaveTimer);
+    _smSaveTimer = setTimeout(flushSiteMemoText, 1500);
+  });
+  ta.addEventListener('blur', flushSiteMemoText);
+  document.getElementById('sm-file-input').addEventListener('change', (e) => {
+    const files = Array.from(e.target.files || []);
+    e.target.value = ''; // 同じファイルを続けて選び直せるように
+    uploadSiteFiles(files);
+  });
+  document.getElementById('sm-files').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-act]');
+    if (!b) return;
+    if (b.dataset.act === 'open') openSiteFile(b.dataset.fileId);
+    else if (b.dataset.act === 'remove') removeSiteFile(b.dataset.fileId);
+  });
+  const bg = document.getElementById('site-memo-modal');
+  const box = bg.querySelector('.site-memo-modal');
+  // 背景をタップしたら閉じる。ただし押し始めも背景のときだけ
+  // （注意事項の文字を選ぶドラッグや枠の伸縮で、外まで行って離した時に閉じてしまわないように）
+  let downOnBg = false;
+  ['mousedown', 'touchstart'].forEach(ev => bg.addEventListener(ev, (e) => { downOnBg = e.target === bg; }, { passive: true }));
+  bg.addEventListener('click', (e) => {
+    if (downOnBg && e.target === bg) closeSiteMemo();
+    downOnBg = false;
+  });
+  // PCからのドラッグ＆ドロップでもPDFを追加できる（編集モードのみ）。
+  // ファイルのドラッグだけを受け取る（文字のドラッグは注意事項欄の普通の動作に任せる）。
+  // ファイルは枠の外に落としてもブラウザがPDFを開いて盤面から離れないよう、既定の動作を止める。
+  const isFileDrag = (e) => !!(e.dataTransfer && Array.from(e.dataTransfer.types || []).indexOf('Files') !== -1);
+  bg.addEventListener('dragover', (e) => {
+    if (!isFileDrag(e)) return;
+    e.preventDefault();
+    const ok = editMode && !!dbxToken;
+    e.dataTransfer.dropEffect = ok ? 'copy' : 'none';
+    box.classList.toggle('drag-over', ok);
+  });
+  bg.addEventListener('dragleave', (e) => {
+    if (!e.relatedTarget || !bg.contains(e.relatedTarget)) box.classList.remove('drag-over');
+  });
+  bg.addEventListener('drop', (e) => {
+    if (!isFileDrag(e)) return;
+    e.preventDefault();
+    box.classList.remove('drag-over');
+    if (editMode) uploadSiteFiles(e.dataTransfer.files);
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key !== 'Escape') return;
+    if (document.getElementById('pdf-viewer').classList.contains('show')) closePdfViewer();
+    else if (siteMemoTarget) closeSiteMemo();
+  });
+})();
+
+// ========== PDFビューア ==========
+// iPad の Safari は iframe に入れたPDFを1ページ目しか出せないことがあり、ホーム画面に追加したアプリでは
+// 別タブ（blob URL）も開けない。どの端末でも全ページを同じように見られるよう、pdf.js でアプリ内に描画する。
+// ライブラリはPDFを初めて開いた時にだけ読み込む（普段の起動は重くしない）。
+const PDFJS_BASE = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/';
+const PV_MAX_PIXELS = 8 * 1024 * 1024;  // 1ページのcanvas画素数の上限（iPadの上限 約1,670万画素に余裕を持たせる）
+const PV_ZOOMS = [0.5, 0.75, 1, 1.25, 1.5, 2, 3, 4];
+let _pdfjsPromise = null;
+let _pdfjsLib = null;  // 本体と worker の両方がそろった時だけ入れる
+let _pv = null;    // 表示中の文書 { doc, pages:[{page,w,h,el,task,rendered}], zoom, scale, gen, io, width }
+let _pvSeq = 0;    // 開く・閉じるたびに増やす。古い読み込みの結果を捨てるための番号
+const PDFJS_LOAD_ERROR = 'PDF表示の部品を読み込めませんでした（インターネット接続を確認してください）';
+
+function loadPdfJs() {
+  if (_pdfjsLib) return Promise.resolve(_pdfjsLib);
+  if (!_pdfjsPromise) {
+    _pdfjsPromise = (async () => {
+      let lib = window.pdfjsLib || window['pdfjs-dist/build/pdf'];
+      if (!lib) {
+        await new Promise((resolve, reject) => {
+          const s = document.createElement('script');
+          s.src = PDFJS_BASE + 'legacy/build/pdf.min.js'; // 古めのiPadでも動く legacy 版
+          s.onload = resolve;
+          s.onerror = () => { s.remove(); reject(new Error(PDFJS_LOAD_ERROR)); };
+          document.head.appendChild(s);
+        });
+        lib = window.pdfjsLib || window['pdfjs-dist/build/pdf'];
+        if (!lib) throw new Error('PDF表示の準備に失敗しました');
+      }
+      // worker も自分で取ってきて、同じオリジンの blob URL で渡す。pdf.js 任せにすると、取得に1回失敗しただけで
+      // 失敗を覚えてしまい、再読み込み（iPadのホーム画面アプリは強制終了）するまでPDFが一切開けなくなる。
+      // ここで失敗すれば _pdfjsPromise を捨てるので、次にPDFを開いた時にやり直せる。
+      const r = await fetch(PDFJS_BASE + 'legacy/build/pdf.worker.min.js').catch(() => null);
+      if (!r || !r.ok) throw new Error(PDFJS_LOAD_ERROR);
+      lib.GlobalWorkerOptions.workerSrc = URL.createObjectURL(await r.blob());
+      _pdfjsLib = lib;
+      return lib;
+    })().catch(e => { _pdfjsPromise = null; throw e; });
+  }
+  return _pdfjsPromise;
+}
+
+// ホーム画面に追加したアプリ（iPad）では blob の別タブが開けないので、代わりに共有シート（プリント・"ファイル"に保存）を出す
+function isStandaloneApp() {
+  return navigator.standalone === true || !!(window.matchMedia && window.matchMedia('(display-mode: standalone)').matches);
+}
+
+function pvOpen(title) {
+  const seq = ++_pvSeq;
+  pvDestroyDoc();
+  releaseShownEntry();
+  document.getElementById('pv-title').textContent = title;
+  const a = document.getElementById('pv-open');
+  a.removeAttribute('href');
+  a.onclick = null;
+  a.textContent = isStandaloneApp() ? '共有・印刷' : '別タブで開く';
+  a.style.display = '';
+  a.classList.add('disabled');
+  document.getElementById('pv-zoom').textContent = '';
+  pvMessage('Dropboxから取得中…');
+  document.getElementById('pdf-viewer').classList.add('show');
+  // 押したファイルのボタンにフォーカスが残ると、PCでスペース/Enterを押した時に裏でPDFを開き直してしまう。
+  // ビューアへ移して、スペース・矢印・PageDownでPDFがスクロールするようにする
+  if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
+  try { document.getElementById('pv-body').focus({ preventScroll: true }); } catch (e) {}
+  return seq;
+}
+
+// 「別タブで開く」（ブラウザ標準のPDF表示。印刷・保存用）／ホーム画面アプリでは「共有・印刷」
+function pvSetupHandOff(entry, name) {
+  const a = document.getElementById('pv-open');
+  a.classList.remove('disabled');
+  if (!isStandaloneApp()) { a.href = entry.url; return; }
+  let file = null;
+  try { file = new File([entry.blob], name || 'document.pdf', { type: 'application/pdf' }); } catch (e) {}
+  if (file && navigator.canShare && navigator.canShare({ files: [file] })) {
+    a.onclick = (e) => { e.preventDefault(); navigator.share({ files: [file], title: name }).catch(() => {}); };
+  } else {
+    a.style.display = 'none'; // 共有もできない端末では、開けないボタンは出さない
+  }
+}
+
+function pvMessage(text) {
+  const body = document.getElementById('pv-body');
+  body.innerHTML = '';
+  const m = document.createElement('div');
+  m.className = 'pv-msg';
+  m.textContent = text;
+  body.appendChild(m);
+}
+
+function closePdfViewer() {
+  _pvSeq++;
+  pvDestroyDoc();
+  releaseShownEntry();
+  document.getElementById('pdf-viewer').classList.remove('show');
+  document.getElementById('pv-body').innerHTML = '';
+}
+
+function pvDestroyDoc() {
+  const pv = _pv;
+  if (!pv) return;
+  _pv = null;
+  if (pv.io) pv.io.disconnect();
+  pv.pages.forEach(pvFreePage);
+  try { pv.doc.destroy(); } catch (e) {}
+}
+
+async function pvShowDoc(entry, seq, name) {
+  _pvShownEntry = entry;
+  pvSetupHandOff(entry, name);
+  pvMessage('表示の準備中…');
+  const lib = await loadPdfJs();
+  const data = new Uint8Array(await new Response(entry.blob).arrayBuffer());
+  if (seq !== _pvSeq) return;
+  const task = lib.getDocument({
+    data,
+    cMapUrl: PDFJS_BASE + 'cmaps/',  // フォントを埋め込んでいない日本語PDFの文字対応表
+    cMapPacked: true,
+    standardFontDataUrl: PDFJS_BASE + 'standard_fonts/',
+    isEvalSupported: false,          // フォント処理で eval を使わない（既知の脆弱性の対策）
+  });
+  // 失敗した時も読み込み用の worker（PDFを丸ごと抱えている）を必ず片付ける
+  let doc;
+  try { doc = await task.promise; }
+  catch (e) { try { task.destroy(); } catch (_) {} throw e; }
+  if (seq !== _pvSeq) { task.destroy(); return; }
+  const pages = [];
+  try {
+    for (let i = 1; i <= doc.numPages; i++) {
+      const page = await doc.getPage(i);
+      if (seq !== _pvSeq) { doc.destroy(); return; }
+      const vp = page.getViewport({ scale: 1 });
+      pages.push({ page, w: vp.width, h: vp.height, el: null, task: null, rendered: false });
+    }
+  } catch (e) { try { doc.destroy(); } catch (_) {} throw e; }
+  const body = document.getElementById('pv-body');
+  body.innerHTML = '';
+  body.scrollTop = 0;
+  pages.forEach((p, i) => {
+    p.el = document.createElement('div');
+    p.el.className = 'pv-page';
+    p.el.dataset.idx = i;
+    p.el.dataset.no = `${i + 1} / ${pages.length}`;
+    body.appendChild(p.el);
+  });
+  _pv = { doc, pages, zoom: 1, scale: 1, gen: 0, io: null, width: 0 };
+  pvLayout();
+}
+
+// ページの枠の大きさを倍率に合わせて決め直し、見えている付近だけ描く
+function pvLayout() {
+  const pv = _pv;
+  if (!pv) return;
+  const body = document.getElementById('pv-body');
+  pv.width = body.clientWidth;
+  const maxW = Math.max.apply(null, pv.pages.map(p => p.w));
+  const fit = Math.max(120, body.clientWidth - 16) / maxW; // 16 = 左右の余白
+  const ratio = body.scrollHeight > 0 ? body.scrollTop / body.scrollHeight : 0;
+  pv.scale = fit * pv.zoom;
+  pv.gen++;
+  pv.pages.forEach(p => {
+    if (p.task) { try { p.task.cancel(); } catch (e) {} p.task = null; }
+    p.rendered = false; // 今のcanvasは引き伸ばした仮表示のまま残し、描き直せたら差し替える
+    p.el.style.width = Math.floor(p.w * pv.scale) + 'px';
+    p.el.style.height = Math.floor(p.h * pv.scale) + 'px';
+  });
+  body.scrollTop = ratio * body.scrollHeight;
+  document.getElementById('pv-zoom').textContent = Math.round(pv.zoom * 100) + '%';
+  if (pv.io) pv.io.disconnect();
+  // 画面の上下1画面ぶんまでを描き、離れたページのcanvasは捨てる（大きな図面・多ページでもメモリを食わない）
+  pv.io = new IntersectionObserver((entries) => {
+    if (_pv !== pv) return;
+    entries.forEach(en => {
+      const p = pv.pages[+en.target.dataset.idx];
+      if (!p) return;
+      if (en.isIntersecting) pvRenderPage(pv, p); else pvFreePage(p);
+    });
+  }, { root: body, rootMargin: '100% 0px' });
+  pv.pages.forEach(p => pv.io.observe(p.el));
+}
+
+function pvRenderPage(pv, p) {
+  if (p.rendered || p.task) return;
+  const gen = pv.gen;
+  const cssW = p.w * pv.scale, cssH = p.h * pv.scale;
+  let out = window.devicePixelRatio || 1;
+  if (cssW * cssH * out * out > PV_MAX_PIXELS) out = Math.sqrt(PV_MAX_PIXELS / (cssW * cssH)); // 拡大しすぎは解像度を抑える
+  const vp = p.page.getViewport({ scale: pv.scale * out });
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.max(1, Math.floor(vp.width));
+  canvas.height = Math.max(1, Math.floor(vp.height));
+  const task = p.page.render({ canvasContext: canvas.getContext('2d'), viewport: vp });
+  p.task = task;
+  task.promise.then(() => {
+    if (_pv !== pv || pv.gen !== gen || p.task !== task) { canvas.width = canvas.height = 0; return; }
+    const old = p.el.querySelector('canvas');
+    if (old) { old.width = old.height = 0; }
+    p.el.innerHTML = '';
+    p.el.appendChild(canvas);
+    p.rendered = true;
+  }).catch(() => { canvas.width = canvas.height = 0; })
+    .finally(() => { if (p.task === task) p.task = null; });
+}
+
+function pvFreePage(p) {
+  if (p.task) { try { p.task.cancel(); } catch (e) {} p.task = null; }
+  const c = p.el && p.el.querySelector('canvas');
+  if (c) { c.width = 0; c.height = 0; c.remove(); }
+  p.rendered = false;
+  // canvas だけでなく、pdf.js がページごとに抱えている画像・描画命令も手放す
+  // （これをしないと、写真入りやスキャンの多ページPDFを最後まで見た時にiPadのメモリが尽きる）
+  try { p.page.cleanup(); } catch (e) {}
+}
+
+// dir: -1=縮小 / 1=拡大 / 0=画面の幅に合わせる
+function pdfZoom(dir) {
+  if (!_pv) return;
+  let i = PV_ZOOMS.indexOf(_pv.zoom);
+  if (dir === 0 || i < 0) i = PV_ZOOMS.indexOf(1);
+  else i = Math.min(PV_ZOOMS.length - 1, Math.max(0, i + dir));
+  if (PV_ZOOMS[i] === _pv.zoom && dir !== 0) return;
+  _pv.zoom = PV_ZOOMS[i];
+  pvLayout();
+}
+
+// 画面の回転・ウィンドウ幅の変更に追従（iPadはスクロールでも resize が来るので幅が変わった時だけ）
+let _pvResizeTimer = null;
+window.addEventListener('resize', () => {
+  if (!_pv) return;
+  clearTimeout(_pvResizeTimer);
+  _pvResizeTimer = setTimeout(() => {
+    if (_pv && document.getElementById('pv-body').clientWidth !== _pv.width) pvLayout();
+  }, 200);
+});
 
 // ========== Export / Import ==========
 // ===== Backup folder (File System Access API) =====
@@ -4396,6 +5325,9 @@ function openColorPicker(type, label, viewOnly) {
 
   // 保有資格 (person only)
   renderQualSection(type, label, viewOnly);
+
+  // 現場メモを開くボタン ─ 現場のみ（編集モード）
+  document.getElementById('site-memo-row').style.display = (type === 'site' && !viewOnly) ? '' : 'none';
 
   // 完了（アーカイブ）ボタン ─ 現場のみ表示
   const archRow = document.getElementById('site-archive-row');
@@ -5080,10 +6012,12 @@ function renderListTable() {
   const headLabel = listSection === 'person' ? '氏名' :
                     listSection === 'equipment' ? '重機' : '車両';
   let html = `<thead><tr><th class="name-col">${headLabel}</th>`;
+  const today = todayStr();
   days.forEach(d => {
     const dow = dayOfWeek(d);
-    const bgCls = dateBgClass(d);
-    html += `<th class="${bgCls}">${DAYS_JP[dow]} ${formatDate(d)}</th>`;
+    const bgCls = dateBgClass(d) + (d === today ? ' today' : '');
+    const todayTag = d === today ? '<span class="today-tag">今日</span>' : '';
+    html += `<th class="${bgCls}">${DAYS_JP[dow]} ${formatDate(d)}${todayTag}</th>`;
   });
   html += '<th>稼働日数</th></tr></thead><tbody>';
 
@@ -6299,9 +7233,15 @@ setInterval(autoBackupToFolder, AUTO_BACKUP_INTERVAL_MS);
 
 // 閉じる時の警告（Dropbox同期未完了の場合）
 window.addEventListener('beforeunload', (e) => {
+  flushSiteMemoText(); // 現場メモの書きかけも保存対象にする
   if (_dbxPending) {
     e.preventDefault();
     e.returnValue = 'まだクラウドに保存していない変更があります。閉じてもよろしいですか？';
+    return e.returnValue;
+  }
+  if (_smUploading.length) { // PDFのアップロード中に閉じると、そのPDFは一覧に載らない
+    e.preventDefault();
+    e.returnValue = 'PDFをアップロード中です。閉じるとそのPDFは追加されません。閉じてもよろしいですか？';
     return e.returnValue;
   }
 });
@@ -6309,6 +7249,7 @@ window.addEventListener('beforeunload', (e) => {
 // ページが裏に行った時にも定期保存をトリガ（モバイルなど）
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'hidden') {
+    flushSiteMemoText(); // 現場メモの書きかけを先に確定させ、下の即時保存に乗せる
     // 即座にDropbox保存
     if (dbxToken && _dbxPending) {
       if (dbxAutoSaveTimer) { clearTimeout(dbxAutoSaveTimer); dbxAutoSaveTimer = null; }
