@@ -569,6 +569,20 @@
     margin-top: 2px;
   }
   .day-sums .day-total { margin-top: 0; }
+  /* 曜日見出しの誕生日（その日が誕生日の人の名前） */
+  .day-bday {
+    display: block;
+    max-width: 100%;
+    margin-top: 2px;
+    padding: 0 6px;
+    border-radius: 8px;
+    background: #fef3c7;
+    color: #92400e;
+    font-size: 11px;
+    font-weight: bold;
+    line-height: 16px;
+    overflow-wrap: anywhere;
+  }
   .day-sites {
     font-size: 11px;
     font-weight: bold;
@@ -1748,6 +1762,41 @@
     box-shadow: 0 0 0 1px white;
   }
 
+  /* 誕生日：盤面はその日の列、プールは今日が誕生日の人を金色に光らせる。
+     ::before は区分の印（実/特/協）、::after は所属の点で使っているので、ケーキは実体の span で付ける */
+  .magnet.bday {
+    animation: bday-glow 1.6s ease-in-out infinite;
+  }
+  .magnet .bday-cake {
+    font-size: 11px;
+    margin-right: 2px;
+  }
+  @keyframes bday-glow {
+    0%, 100% { box-shadow: 0 0 0 2px #fbbf24, 0 0 3px 1px rgba(251,191,36,0.5); }
+    50%      { box-shadow: 0 0 0 2px #fbbf24, 0 0 8px 3px rgba(251,191,36,0.95); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .magnet.bday { animation: none; box-shadow: 0 0 0 2px #fbbf24, 0 0 6px 2px rgba(251,191,36,0.8); }
+  }
+  .bday-row {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 12px;
+  }
+  .bday-row .affil-label { margin-bottom: 0; }
+  .bday-row select {
+    padding: 4px 6px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-size: 13px;
+  }
+  .bday-row .bday-hint {
+    font-size: 11px;
+    color: #888;
+  }
+
   /* ===== List modal ===== */
   .modal-large {
     width: 95vw;
@@ -2158,6 +2207,8 @@
     .head.today { box-shadow: none !important; }
     .head.today::before { display: none !important; }
     .cell.today { background: white !important; box-shadow: none !important; }
+    /* 誕生日（個人の情報）は配布する週間表に載せない */
+    .day-bday, .magnet .bday-cake { display: none !important; }
     .site-memo-btn { font-size: 7.5px !important; padding: 1px 2px !important; margin-top: 1px !important; }
     .app { display: block !important; height: auto !important; }
     .main { display: block !important; overflow: visible !important; }
@@ -2342,6 +2393,13 @@
       </div>
       <input type="text" id="affil-memo" class="affil-memo-input" placeholder="メモ（任意）：資格・備考など" />
     </div>
+    <!-- 人員のみ：誕生日（月日だけ。年は持たない）。その日の列でマグネットが光る -->
+    <div id="bday-row" class="bday-row" style="display:none">
+      <span class="affil-label">誕生日：</span>
+      <select id="bday-month" onchange="onBirthdayChange()"></select>
+      <select id="bday-day" onchange="onBirthdayChange()"></select>
+      <span class="bday-hint">その日の列でマグネットが光ります</span>
+    </div>
     <!-- 閲覧モードで開いたときの読み取り専用の所属・メモ -->
     <div id="person-ro-info" class="person-ro-info" style="display:none"></div>
     <!-- 人員のみ：保有資格（資格者証一覧より。アプリ内で編集可） -->
@@ -2495,6 +2553,17 @@
           <input type="checkbox" id="note-toolbar-toggle" onchange="setNoteToolbarEnabled(this.checked)">
           備考欄でツールバーを表示する
         </label>
+      </div>
+    </div>
+
+    <div class="settings-section">
+      <h3>誕生日の取り込み</h3>
+      <p>作業員名簿から作った誕生日ファイル（.json）を読み込みます。誕生日の当日は、その日の列にあるマグネットが光ります。<br>
+        保存するのは月日だけです（年は保存しません）。1人ずつ直すときは、編集モードでマグネットをタップしてください。</p>
+      <div class="settings-row">
+        <button class="primary" onclick="startBirthdayImport()">🎂 誕生日ファイルを読み込む</button>
+        <input type="file" id="bday-file-input" accept=".json,application/json" style="display:none" onchange="importBirthdays(this)">
+        <span id="bday-count" style="font-size:13px; color:#666;"></span>
       </div>
     </div>
 
@@ -2888,6 +2957,16 @@
       </ul>
       <div class="help-note">資格者証一覧に載っていない人（実習生など）は最初は「登録なし」です。<span class="hk">✏ 編集</span> からこのアプリに直接登録できます。<br>
         元のExcelを更新しても<strong>アプリには自動で反映されません</strong>。大きく変わったときは取り込み直しが必要です。</div>
+
+      <h4>誕生日</h4>
+      <ul>
+        <li>誕生日の人のマグネットは、<strong>その日の列で金色に光り、🎂が付きます</strong>。先の週を表示していても、その日の列で光ります。右側のプールでは、<strong>今日が誕生日の人</strong>だけが光ります。</li>
+        <li>曜日の見出しにも<strong>「🎂 名前」</strong>が出ます。配置とは関係なく出るので、だれも入っていない日曜や休みの日でも分かります。</li>
+        <li>PDF出力（印刷）には、誕生日の印も名前も載りません。</li>
+        <li>誕生日を入れる・直すときは、<span class="hk">編集モード</span> でマグネットをタップし、「誕生日」の月・日を選びます。どちらかを「—」にすると消えます。</li>
+        <li>名簿からまとめて入れるときは、<span class="hk">⚙ 設定</span> の「🎂 誕生日ファイルを読み込む」を使います（編集モードのみ）。</li>
+        <li>保存するのは<strong>月日だけ</strong>で、年（年齢）は持ちません。2月29日生まれの人は、うるう年でない年は2月28日に光ります。</li>
+      </ul>
 
       <h4>資格から人を探す（逆引き）</h4>
       <p>「玉掛けを持っているのは誰か」を調べるときは、ツールバーの <span class="hk">🎫 資格</span>（スマホは <span class="hk">︙</span> →「資格から探す」）を開きます。閲覧モードでも開けます。</p>
@@ -3332,6 +3411,7 @@ function loadState() {
       if (!obj.personMemo) obj.personMemo = {};
       if (!obj.personQual) obj.personQual = {};
       if (!obj.personQualSrc) obj.personQualSrc = {};
+      if (!obj.personBirthday) obj.personBirthday = {};
       if (!obj.cellMemo) obj.cellMemo = {};
       if (!obj.viewFilter) obj.viewFilter = 'all';
       if (!obj.labels) obj.labels = { person: [], equipment: [], vehicle: [] };
@@ -3432,6 +3512,7 @@ function initialState() {
     personMemo: {},
     personQual: {},
     personQualSrc: {},
+    personBirthday: {},
     cellMemo: {},
     viewFilter: 'all',
   };
@@ -3612,6 +3693,7 @@ function renderGrid() {
     head.dataset.date = dateStr;
     head.innerHTML = `<span class="day-name">${DAYS_JP[dow]}</span><span class="day-num">${new Date(dateStr).getDate()}</span><button class="day-copy-btn" title="タップ：複数選択コピー / ドラッグ：別日へコピー">📋</button>`;
     renderDaySums(head, dateStr); // 計○人・○現場
+    renderDayBirthdays(head, dateStr); // 🎂 その日が誕生日の人
     const btn = head.querySelector('.day-copy-btn');
     const dayLabel = `${DAYS_JP[dow]}曜 ${new Date(dateStr).getMonth()+1}/${new Date(dateStr).getDate()} の配置`;
     makeCopyDraggable(btn, 'day', dateStr, dayLabel, () => openDayCopy(dateStr));
@@ -3758,6 +3840,8 @@ function markToday() {
   document.querySelectorAll('#grid .head[data-date], #grid .cell[data-date]').forEach(el => {
     el.classList.toggle('today', el.dataset.date === t);
   });
+  // プールの誕生日は「今日」で光らせているので、表示したまま日付が変わったら付け直す
+  document.querySelectorAll('#pool-items .magnet').forEach(el => applyBirthdayGlow(el, t));
 }
 setInterval(() => { if (todayStr() !== _todayMarked) markToday(); }, 60 * 1000);
 
@@ -3782,7 +3866,7 @@ function makeCell(siteId, dateStr, rowCls) {
   list.className = 'magnet-list';
   list.dataset.siteId = siteId;
   list.dataset.date = dateStr;
-  data.magnets.forEach(m => list.appendChild(makeMagnet(m)));
+  data.magnets.forEach(m => list.appendChild(makeMagnet(m, dateStr)));
   cell.appendChild(list);
 
   const note = document.createElement('div');
@@ -3842,7 +3926,7 @@ function makeCell(siteId, dateStr, rowCls) {
   return cell;
 }
 
-function makeMagnet(m) {
+function makeMagnet(m, dateStr) {
   const el = document.createElement('div');
   el.className = 'magnet';
   el.dataset.type = m.type;
@@ -3855,6 +3939,7 @@ function makeMagnet(m) {
   }
   el.innerHTML = `<span>${escapeHtml(m.label)}</span><span class="del" onclick="event.stopPropagation(); deleteMagnetFromCell(this.parentElement)">×</span>`;
   applyMagnetColor(el, m.type, m.label);
+  applyBirthdayGlow(el, dateStr);
   el.addEventListener('click', (e) => {
     if (e.target.classList.contains('del')) return;
     if (Sortable.active) return;
@@ -3883,6 +3968,8 @@ function renderPool() {
     }
     el.innerHTML = `<span>${escapeHtml(label)}</span>${editMode ? '<span class="del" onclick="event.stopPropagation(); deletePoolLabel(\''+escapeAttr(label)+'\')">×</span>' : ''}`;
     applyMagnetColor(el, activeTab, label);
+    // プールには日付が無いので「今日」で判定する（マスに置いたら onMagnetAdd でその列の日付に付け直す）
+    applyBirthdayGlow(el, todayStr());
     el.addEventListener('click', (e) => {
       if (e.target.classList.contains('del')) return;
       if (Sortable.active) return;
@@ -4000,6 +4087,8 @@ function onMagnetAdd(evt) {
   // 同日重複チェック
   const toList = evt.to;
   const dateStr = toList.dataset.date;
+  // 誕生日の光り方は置いた先の列の日付で付け直す（プールから来たものは「今日」、別の日のマスから来たものは元の日で判定されている）
+  applyBirthdayGlow(item, dateStr);
   const dup = findDuplicateOnDay(dateStr, item.dataset.type, item.dataset.label, item);
   if (dup) {
     const dupSite = state.sites.find(s => s.id === dup.siteId);
@@ -4095,6 +4184,21 @@ function renderDaySums(head, dateStr) {
   if (sitesEl) sitesEl.title = `稼働現場 ${workSites.length}か所\n` + workSites.join('\n');
 }
 
+// 曜日見出しに、その日が誕生日の人の名前を出す。配置とは関係なく出すので、だれも入っていない日曜・休みの日でも分かる。
+// 対象はプールにいる人（協力業者は会社単位なので除く）。
+function renderDayBirthdays(head, dateStr) {
+  const names = (state.labels.person || []).filter(l => getPersonKind(l) !== 'partner' && isBirthdayOn(l, dateStr));
+  let el = head.querySelector('.day-bday');
+  if (!names.length) { if (el) el.remove(); return; }
+  if (!el) {
+    el = document.createElement('span');
+    el.className = 'day-bday';
+    head.insertBefore(el, head.querySelector('.day-copy-btn'));
+  }
+  el.textContent = '🎂 ' + names.join('・');
+  el.title = names.join('・') + ' さんの誕生日';
+}
+
 function deleteMagnetFromCell(magnetEl) {
   const list = magnetEl.parentElement;
   magnetEl.remove();
@@ -4185,8 +4289,12 @@ async function addPartnerItem() {
 function deletePoolLabel(label) {
   if (!confirm(`「${label}」をプールから削除しますか？（配置済みのものは残ります）`)) return;
   state.labels[activeTab] = state.labels[activeTab].filter(l => l !== label);
+  // 誕生日は個人の情報なので残さない（あとで同じ名前の別の人を追加したとき、その誕生日で光らないように）
+  const hadBday = activeTab === 'person' && !!(state.personBirthday && state.personBirthday[label]);
+  if (hadBday) delete state.personBirthday[label];
   saveState();
-  renderPool();
+  if (hadBday) render(); // 曜日見出しの「🎂 名前」も消す
+  else renderPool();
 }
 
 async function addSite() {
@@ -5479,12 +5587,23 @@ function openColorPicker(type, label, viewOnly) {
     affilWrap.style.display = 'none';
   }
 
+  // 誕生日 (person only・編集モード)
+  const bdayRow = document.getElementById('bday-row');
+  if (type === 'person' && !viewOnly) {
+    bdayRow.style.display = '';
+    fillBirthdaySelects(getPersonBirthday(label));
+  } else {
+    bdayRow.style.display = 'none';
+  }
+
   // 閲覧モードの人員：所属・メモは読み取り専用のテキストで見せる
   const roInfo = document.getElementById('person-ro-info');
   if (type === 'person' && viewOnly) {
     const memo = getPersonMemo(label);
+    const bday = getPersonBirthday(label);
     const kindName = { jp: '日本人', trainee: '実習生', tokutei: '特定技能', partner: '協力業者' }[getPersonKind(label)] || '';
     let ro = `区分：${escapeHtml(kindName)}　所属：${escapeHtml(AFFIL_LABEL[getPersonAffil(label)] || '')}`;
+    if (bday) ro += `<br>誕生日：${formatBirthday(bday)}${isBirthdayOn(label, todayStr()) ? '（今日 🎂）' : ''}`;
     if (memo) ro += `<br>メモ：${escapeHtml(memo)}`;
     roInfo.innerHTML = ro;
     roInfo.style.display = '';
@@ -5591,6 +5710,12 @@ function applyRename() {
   if (type === 'person' && state.personMemo && state.personMemo[label] !== undefined) {
     state.personMemo[newName] = state.personMemo[label];
     delete state.personMemo[label];
+  }
+  if (type === 'person' && state.personBirthday) {
+    // 改名先の名前に前の人の誕生日が残っていても使わない（その人の誕生日で光ってしまうため）
+    if (state.personBirthday[label] !== undefined) state.personBirthday[newName] = state.personBirthday[label];
+    else delete state.personBirthday[newName];
+    delete state.personBirthday[label];
   }
   // 資格は改名後も引き継ぐ。
   // 出典（名簿の氏名）＝既定値・〈AT〉注記の引き当て先を別名として覚えておけば、
@@ -5718,6 +5843,156 @@ function getPersonAffil(name) {
 
 function getPersonMemo(name) {
   return (state.personMemo && state.personMemo[name]) || '';
+}
+
+// ========== 誕生日 ==========
+// state.personBirthday = { マグネット名: 'MM-DD' }。月日だけで年は持たない。board.json で全端末に共有する。
+// GitHub Pages の index.html は誰でも見られるので、資格のような既定値の定数は作らない。
+// 名簿からは ⚙設定の「誕生日ファイルを読み込む」で取り込む。
+const BDAY_MONTH_DAYS = [31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+
+function isValidBirthday(md) {
+  if (typeof md !== 'string') return false; // 配列などは文字列に変換されて検査をすり抜けるので弾く
+  const m = /^(\d{2})-(\d{2})$/.exec(md);
+  if (!m) return false;
+  const mo = Number(m[1]), d = Number(m[2]);
+  return mo >= 1 && mo <= 12 && d >= 1 && d <= BDAY_MONTH_DAYS[mo - 1];
+}
+
+function getPersonBirthday(name) {
+  const md = state.personBirthday && state.personBirthday[name];
+  return isValidBirthday(md) ? md : '';
+}
+
+// dateStr（YYYY-MM-DD）がその人の誕生日か。備考欄('__note__')は日付ではないので光らない。
+// 2/29生まれは、うるう年でない年は2/28に光らせる。
+function isBirthdayOn(name, dateStr) {
+  const md = getPersonBirthday(name);
+  if (!md || !/^\d{4}-\d{2}-\d{2}$/.test(dateStr || '')) return false;
+  const day = dateStr.slice(5);
+  if (day === md) return true;
+  if (md === '02-29' && day === '02-28') {
+    const y = Number(dateStr.slice(0, 4));
+    return !(y % 4 === 0 && (y % 100 !== 0 || y % 400 === 0));
+  }
+  return false;
+}
+
+function formatBirthday(md) {
+  const [m, d] = md.split('-').map(Number);
+  return `${m}月${d}日`;
+}
+
+// マグネットの光り方とケーキの印を、その dateStr に合わせて付け外しする。
+// 名前は dataset.label から読むので、ケーキの span を足しても readCellFromDom などには影響しない。
+function applyBirthdayGlow(el, dateStr) {
+  const on = el.dataset.type === 'person' && isBirthdayOn(el.dataset.label, dateStr);
+  el.classList.toggle('bday', on);
+  let cake = el.querySelector(':scope > .bday-cake');
+  if (on && !cake) {
+    cake = document.createElement('span');
+    cake.className = 'bday-cake';
+    cake.textContent = '🎂';
+    el.insertBefore(cake, el.firstChild);
+  } else if (!on && cake) {
+    cake.remove();
+  }
+}
+
+// マグネット設定の月・日のプルダウン（最初の1回だけ選択肢を作る）
+function fillBirthdaySelects(md) {
+  const mSel = document.getElementById('bday-month');
+  const dSel = document.getElementById('bday-day');
+  if (!mSel.options.length) {
+    mSel.innerHTML = '<option value="">—</option>' +
+      Array.from({ length: 12 }, (_, i) => `<option value="${String(i + 1).padStart(2, '0')}">${i + 1}月</option>`).join('');
+    dSel.innerHTML = '<option value="">—</option>' +
+      Array.from({ length: 31 }, (_, i) => `<option value="${String(i + 1).padStart(2, '0')}">${i + 1}日</option>`).join('');
+  }
+  const [m, d] = md ? md.split('-') : ['', ''];
+  mSel.value = m;
+  dSel.value = d;
+}
+
+// 月・日の両方を選ぶと保存、どちらかを「—」にすると消す
+function onBirthdayChange() {
+  if (!colorPickerTarget) return;
+  const { type, label } = colorPickerTarget;
+  if (type !== 'person') return;
+  const m = document.getElementById('bday-month').value;
+  let d = document.getElementById('bday-day').value;
+  if (m && d && Number(d) > BDAY_MONTH_DAYS[Number(m) - 1]) {
+    // 月を先に変えて日がはみ出た（1/31→2月など）ときは、その月の末日にそろえる
+    d = String(BDAY_MONTH_DAYS[Number(m) - 1]);
+    document.getElementById('bday-day').value = d;
+  }
+  if (!state.personBirthday) state.personBirthday = {};
+  if (m && d) {
+    const md = `${m}-${d}`;
+    if (!isValidBirthday(md)) {
+      alert(`${Number(m)}月${Number(d)}日 という日付はありません。`);
+      fillBirthdaySelects(getPersonBirthday(label));
+      return;
+    }
+    state.personBirthday[label] = md;
+  } else {
+    delete state.personBirthday[label];
+  }
+  saveState();
+  render();
+}
+
+// ⚙設定：名簿から作った誕生日ファイル（{ マグネット名: 'MM-DD' } か { マグネット名: { md: 'MM-DD', ... } }）を取り込む
+function startBirthdayImport() {
+  if (!editMode) { alert('誕生日の取り込みは、編集モードにしてから行ってください。'); return; }
+  document.getElementById('bday-file-input').click();
+}
+
+function importBirthdays(input) {
+  const file = input.files && input.files[0];
+  input.value = ''; // 同じファイルをもう一度選んでも onchange が動くように
+  if (!file) return;
+  if (!editMode) { alert('誕生日の取り込みは、編集モードにしてから行ってください。'); return; }
+  const reader = new FileReader();
+  reader.onload = () => {
+    let data;
+    try { data = JSON.parse(reader.result); }
+    catch (e) { alert('ファイルを読めませんでした（誕生日ファイルの形式ではありません）。'); return; }
+    if (!data || typeof data !== 'object' || Array.isArray(data)) {
+      alert('ファイルを読めませんでした（誕生日ファイルの形式ではありません）。');
+      return;
+    }
+    const labels = state.labels.person || [];
+    const add = {};
+    const skipped = [];
+    Object.entries(data).forEach(([name, v]) => {
+      const md = typeof v === 'string' ? v : (v && v.md);
+      if (labels.includes(name) && isValidBirthday(md)) add[name] = md;
+      else skipped.push(name);
+    });
+    const names = Object.keys(add);
+    if (!names.length) { alert('取り込める誕生日がありませんでした（プールのマグネット名と一致する人がいません）。'); return; }
+    const overwrite = names.filter(n => getPersonBirthday(n) && getPersonBirthday(n) !== add[n]);
+    let msg = `${names.length}人の誕生日を取り込みます。`;
+    if (overwrite.length) msg += `\n\nうち${overwrite.length}人は、今入っている誕生日を書き換えます：\n${overwrite.join('・')}`;
+    if (skipped.length) msg += `\n\nプールに無い名前など${skipped.length}件は飛ばします：\n${skipped.join('・')}`;
+    if (!confirm(msg)) return;
+    if (!state.personBirthday) state.personBirthday = {};
+    Object.assign(state.personBirthday, add);
+    saveState();
+    render();
+    updateBirthdayCount();
+    alert(`${names.length}人の誕生日を取り込みました。`);
+  };
+  reader.onerror = () => alert('ファイルを読めませんでした。');
+  reader.readAsText(file);
+}
+
+function updateBirthdayCount() {
+  const el = document.getElementById('bday-count');
+  if (!el) return;
+  const n = Object.keys(state.personBirthday || {}).filter(name => getPersonBirthday(name)).length;
+  el.textContent = n ? `登録済み：${n}人` : '';
 }
 
 function setPersonAffiliation(affil) {
@@ -6171,6 +6446,12 @@ document.getElementById('help-modal').addEventListener('click', (e) => {
 // id はこの端末で「どこまで見たか」の目印なので、重複させない・後から変えない。
 // tag は 新機能 / 改善 / 修正 / お知らせ。文は現場の人が読んで分かる言葉で書く（中の仕組みの話は書かない）。
 const CHANGELOG = [
+  { id: '2026-10-17-birthday', date: '2026-10-17', tag: '新機能', title: '誕生日の人のマグネットが光るように',
+    items: [
+      '誕生日の人のマグネットは、その日の列で金色に光り、🎂が付きます。右側のプールでは、今日が誕生日の人が光ります。',
+      '曜日の見出しにも「🎂 名前」が出るので、だれも入っていない日曜や休みの日でも分かります。',
+      '誕生日は、編集モードでマグネットをタップした設定画面で入れられます。保存するのは月日だけです。',
+    ] },
   { id: '2026-09-12-worksites', date: '2026-09-12', tag: '新機能', title: '曜日の見出しに、その日の稼働現場数を表示',
     items: [
       '「計○人」の横に「○現場」と出ます。人（協力業者を含む）が1人以上入っている現場の数です。',
@@ -7065,6 +7346,7 @@ function openSettings() {
   updateBackupDirUI();
   document.getElementById('note-toolbar-toggle').checked = noteToolbarEnabled;
   document.getElementById('device-name-input').value = deviceName;
+  updateBirthdayCount();
   document.getElementById('settings-modal').classList.add('show');
 }
 
