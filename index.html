@@ -311,6 +311,8 @@
   .head.col-blue-black { background: #bbdefb !important; }
   .head.col-green { background: #c8e6c9 !important; }
   .head { position: sticky; top: 0; }
+  /* 曜日見出しは上詰め。「🎂 名前」が出る日と出ない日で、曜日・日付・計○人の高さがそろうように */
+  .head[data-date] { justify-content: flex-start; }
   .day-copy-btn {
     position: absolute;
     top: 4px;
