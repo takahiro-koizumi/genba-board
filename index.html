@@ -679,8 +679,33 @@
   }
   .history-item .h-time { color: #888; min-width: 42px; font-variant-numeric: tabular-nums; }
   .history-item .h-dev { font-weight: 600; color: #333; }
-  .history-item .h-count { margin-left: auto; font-size: 11px; color: #999; white-space: nowrap; }
+  .history-item { cursor: pointer; }
+  .history-item:hover { background: #f8fafc; }
+  .history-item .h-count {
+    margin-left: auto; font-size: 11px; color: #2563eb; white-space: nowrap; font-family: inherit;
+    background: #fff; border: 1px solid #bfdbfe; border-radius: 999px; padding: 1px 8px; cursor: pointer;
+  }
+  .history-item .h-arrow { display: inline-block; margin-left: 3px; transition: transform .15s; }
+  .history-item.open .h-count { background: #eff6ff; }
+  .history-item.open .h-arrow { transform: rotate(90deg); }
   .history-empty { color: #999; font-size: 13px; padding: 14px 2px; }
+  /* 「○件の変更」を押すと開く変更内容 */
+  .history-detail {
+    padding: 4px 6px 8px 54px; border-bottom: 1px solid #f2f2f2;
+    font-size: 12px; color: #334155; background: #f8fafc;
+  }
+  .history-detail .hd-line { padding: 2px 0; line-height: 1.6; }
+  .history-detail .hd-when { color: #64748b; margin-right: 4px; font-variant-numeric: tabular-nums; }
+  .history-detail .hd-site { font-weight: 600; margin-right: 4px; }
+  .history-detail .hd-add, .history-detail .hd-rm, .history-detail .hd-tag, .history-detail .hd-undo {
+    display: inline-block; border-radius: 4px; padding: 0 5px; margin: 1px 4px 1px 0;
+  }
+  .history-detail .hd-add { background: #dcfce7; color: #166534; }
+  .history-detail .hd-rm { background: #fee2e2; color: #991b1b; }
+  .history-detail .hd-tag { background: #e0e7ff; color: #3730a3; font-size: 11px; }
+  .history-detail .hd-undo { background: #fef3c7; color: #92400e; font-size: 11px; }
+  .history-detail .hd-none, .history-detail .hd-note { color: #94a3b8; padding: 2px 0; }
+  @media (max-width: 600px) { .history-detail { padding-left: 10px; } }
   /* 完了現場（非表示にした現場）モーダル */
   .archived-list { max-height: 55vh; overflow-y: auto; margin-top: 6px; }
   .archived-item {
@@ -2598,7 +2623,7 @@
       <button class="close-btn" onclick="closeHistory()">×</button>
     </div>
     <div class="settings-section" style="border-bottom:none;">
-      <p style="font-size:12px; color:#666;">いつ・どの端末（PC/iPad）が盤面を編集したかの記録です。同じ端末の連続した編集は1件にまとめています。<br>最新200件を自動で保持し、古い記録は自動的に消えます。</p>
+      <p style="font-size:12px; color:#666;">いつ・どの端末（PC/iPad）が盤面を編集したかの記録です。同じ端末の連続した編集は1件にまとめています。<br>「○件の変更」を押すと、何を変更したかが開きます（<span style="color:#166534;">＋</span>は配置、<span style="color:#991b1b;">−</span>は外したマグネット）。<br>最新200件を自動で保持し、古い記録は自動的に消えます。</p>
       <div id="history-list" class="history-list"></div>
     </div>
   </div>
@@ -3043,7 +3068,9 @@
       <ul>
         <li>日付ごとに、新しい順で表示されます。</li>
         <li>同じ端末の続けての編集は、1件にまとめて「○件の変更」と表示します。</li>
-        <li>最新200件を自動で保持し、古い記録は自動的に消えます。</li>
+        <li><strong>「○件の変更」を押すと、何を変更したかが開きます</strong>（だれをどの現場に配置した・外した・移した、メモ、現場やプールの追加・名前の変更など）。もう一度押すと閉じます。</li>
+        <li>一度にたくさんのマスを変えたとき（日コピーなど）は、日ごとにまとめて表示します。2026年10月29日より前の記録や、更新前の画面のままの端末からの保存には、変更内容は残りません（その端末で画面を開き直すと記録されるようになります）。</li>
+        <li>最新200件を自動で保持し、古い記録は自動的に消えます。古い記録は、変更内容だけ先に省くことがあります。</li>
       </ul>
 
       <h3 id="help-20">20. 困ったとき・ヒント</h3>
@@ -5258,6 +5285,7 @@ function importData() {
         const obj = JSON.parse(reader.result);
         if (!obj.sites || !obj.labels) throw new Error('形式が違います');
         state = obj;
+        _historyOverride = 'バックアップファイルから復元';   // 編集履歴には差分の羅列でなくこの一言を残す
         saveState();
         render();
         resetUndo();
@@ -5272,6 +5300,7 @@ function importData() {
 function resetAll() {
   if (!confirm('すべての配置・現場・マグネットを初期状態に戻します。よろしいですか？')) return;
   state = initialState();
+  _historyOverride = 'すべてを初期状態に戻した';
   saveState();
   render();
 }
@@ -6448,6 +6477,12 @@ document.getElementById('help-modal').addEventListener('click', (e) => {
 // id はこの端末で「どこまで見たか」の目印なので、重複させない・後から変えない。
 // tag は 新機能 / 改善 / 修正 / お知らせ。文は現場の人が読んで分かる言葉で書く（中の仕組みの話は書かない）。
 const CHANGELOG = [
+  { id: '2026-10-29-history-detail', date: '2026-10-29', tag: '新機能', title: '編集履歴で、何を変更したかが見られるように',
+    items: [
+      '🕘 履歴の「○件の変更」を押すと、その時に何を変えたかが開きます。だれをどの現場に配置した・外した・移した、メモ、現場やプールの追加・名前の変更などが出ます。',
+      '一度にたくさんのマスを変えたとき（日コピーなど）は、日ごとにまとめて表示します。',
+      'この更新より前の履歴や、更新前の画面のままの端末からの保存には変更内容が残らないため、「記録はありません」と出ます。各端末で画面を開き直してください。',
+    ] },
   { id: '2026-10-17-birthday', date: '2026-10-17', tag: '新機能', title: '誕生日の人のマグネットが光るように',
     items: [
       '誕生日の人のマグネットは、その日の列で金色に光り、🎂が付きます。右側のプールでは、今日が誕生日の人が光ります。',
@@ -7392,26 +7427,311 @@ function updateLastEditorLabel() {
 // ========== 編集履歴（いつ・どの端末が編集したか。board.json に相乗りして全社共有）==========
 const HISTORY_LIMIT = 200;                 // 保持する最大件数（古いものから捨てる）
 const HISTORY_COALESCE_MS = 5 * 60 * 1000; // 同一端末の連続編集は5分でまとめる
+// 何を変更したか（履歴の「○件の変更」を押すと開く）。各件の ch に入れる。
+// board.json は全端末が数秒ごとに取りに来るので、太らせすぎないよう上限を設ける。
+const HISTORY_CH_PER_ENTRY = 60;  // 1件（同じ端末の5分以内の編集）に残す変更の数。超えたら初めの方から捨てて新しい方を残す
+const HISTORY_CH_TOTAL = 1000;    // 全履歴で残す変更の合計。超えたら古い件から中身だけ捨てる（時刻・端末・件数は残る）
+const HISTORY_BULK_CELLS = 15;    // 1回の保存でこれより多くのマスが変わったら（日コピー等）日ごとにまとめる
+const HISTORY_NOTE_MAX = 200;     // メモは全文で比べたいので長めに残す（これより長い分は切ってハッシュで比べる）
+const HISTORY_LABEL_TYPE_JP = { person: '人員', equipment: '重機', vehicle: '車両', tool: '機材' };
+const HISTORY_KEY_JP = {
+  labelColors: '色', personKind: '人員の区分', personAffil: '所属', personMemo: '人員のメモ',
+  personQual: '保有資格', personQualSrc: '資格の名簿の対応', personBirthday: '誕生日', cellMemo: '一覧のメモ',
+};
+// 違いを見ないキー（表示状態・履歴そのもの・読み込み時の移行フラグ）と、個別に見るキー
+const HISTORY_SKIP_KEYS = new Set(['schedule', 'sites', 'labels', 'weekStart', 'viewFilter',
+  '_lastEditor', '_lastEditAt', '_history', 'equipImportV1', 'equipImportV2', 'equipImportV3']);
 
-function recordHistory(name, now) {
+function recordHistory(name, now, changes, isUndo) {
   if (!Array.isArray(state._history)) state._history = [];
   const h = state._history;
-  const last = h[h.length - 1];
-  if (last && last.device === name && (now - last.at) < HISTORY_COALESCE_MS) {
-    last.at = now; last.count = (last.count || 1) + 1;   // 直近の同一端末の編集にまとめる
+  let cur = h[h.length - 1];
+  if (cur && cur.device === name && (now - cur.at) < HISTORY_COALESCE_MS) {
+    cur.at = now; cur.count = (Number(cur.count) || 1) + 1;   // 直近の同一端末の編集にまとめる
+    if (!Array.isArray(cur.ch)) cur.ch = [];
+    // chn＝変更内容まで記録した保存の回数。count との差は、この機能の前の分や古い版のアプリからの保存
+    cur.chn = (Number(cur.chn) || 0) + 1;
   } else {
-    h.push({ device: name, at: now, count: 1 });
+    cur = { device: name, at: now, count: 1, ch: [], chn: 1 };
+    h.push(cur);
     if (h.length > HISTORY_LIMIT) h.splice(0, h.length - HISTORY_LIMIT);
+  }
+  // 変更内容の記録で何か起きても、盤面の保存（呼び出し元の saveState）は止めない
+  try {
+    (changes || []).forEach(c => pushHistoryChange(cur, isUndo ? { ...c, u: 1 } : c));
+    trimHistoryDetails(h);
+  } catch (e) {
+    console.error('[履歴] 変更内容の記録に失敗', e);
   }
 }
 
+// 1件の変更内容に1つ足す。直前と同じマス・同じ項目への続けての変更は1つにまとめる
+// （メモの書き直しは最初→最後だけ、置いてすぐ外したマグネットは打ち消す）。
+function pushHistoryChange(e, c) {
+  const last = e.ch[e.ch.length - 1];
+  if (last && typeof last === 'object' && last.k === c.k && (last.u || 0) === (c.u || 0)) {
+    if (histSameCell(last, c)) {
+      if (!c.k && Array.isArray(last.a) && Array.isArray(last.r)) {
+        c.a.forEach(l => { const i = last.r.indexOf(l); if (i >= 0) last.r.splice(i, 1); else last.a.push(l); });
+        c.r.forEach(l => { const i = last.a.indexOf(l); if (i >= 0) last.a.splice(i, 1); else last.r.push(l); });
+        last.s = c.s;
+        if (!last.a.length && !last.r.length) e.ch.pop();
+        return;
+      }
+      if (c.k === 'n') {   // 書き直して最初の内容に戻ったら打ち消す（全文で比べる。長いメモはハッシュ）
+        last.v = c.v; if (c.vh) last.vh = c.vh; else delete last.vh;
+        last.s = c.s;
+        if (histNoteKey(last.o, last.oh) === histNoteKey(last.v, last.vh)) e.ch.pop();
+        return;
+      }
+      if (c.k === 'o' || c.k === 'f') return;
+    }
+    if (c.k === 'sn' && last.id === c.id) { last.t = c.t; if (last.f === last.t) e.ch.pop(); return; }
+    if ((c.k === 'sp' || c.k === 'sm') && last.id === c.id) { last.s = c.s; last.v = c.v; return; }
+    if (c.k === 'ln' && last.ty === c.ty && last.t === c.f) { last.t = c.t; if (last.f === last.t) e.ch.pop(); return; }
+    // 文言だけの記録は、上書きになる種類（m 印：色・並び順・設定など）の繰り返しだけをまとめる。
+    // 「追加」「削除」「まとめて変更」は2回やれば2回分の意味があるので、同じ文言でも残す
+    if (c.k === 't' && c.m && last.m && last.x === c.x && (last.id || '') === (c.id || '')) return;
+  }
+  e.ch.push(c);
+  // 多すぎる時は初めの方を捨てて、新しい方（最後にどうしたか）を残す
+  if (e.ch.length > HISTORY_CH_PER_ENTRY) {
+    const n = e.ch.length - HISTORY_CH_PER_ENTRY;
+    e.ch.splice(0, n);
+    e.skip = (Number(e.skip) || 0) + n;
+  }
+}
+
+// 同じマスか。同じ名前の現場が2つあることもあるので現場IDで比べる（IDの無い記録だけ名前で）
+function histSameCell(p, q) {
+  if (p.d !== q.d) return false;
+  return (p.sid || q.sid) ? p.sid === q.sid : p.s === q.s;
+}
+function histHash(s) {   // FNV-1a（長いメモが同じかどうかを見るだけ）
+  let h = 0x811c9dc5;
+  for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 0x01000193); }
+  return (h >>> 0).toString(36);
+}
+function histNoteKey(text, hash) { return hash ? '\u0000' + hash : (text || ''); }
+// マスの記録の a/r は「種別の1文字:名前」で持つ（重機と機材に同じ名前があることがあるので、打ち消しや移動を種別ごとに見る）
+const HIST_TYPE_CODE = { person: 'p', equipment: 'e', vehicle: 'v', tool: 't' };
+function histMagKey(type, label) { return (HIST_TYPE_CODE[type] || type || '?') + ':' + label; }
+function histMagLabel(k) { k = String(k); const i = k.indexOf(':'); return i >= 0 ? k.slice(i + 1) : k; }
+// メモを履歴に入れる形に。長いものは切って、全文のハッシュを付ける
+function histNoteFields(note, textKey, hashKey) {
+  const s = String(note || '');
+  if (s.length <= HISTORY_NOTE_MAX) return { [textKey]: s };
+  return { [textKey]: s.slice(0, HISTORY_NOTE_MAX), [hashKey]: histHash(s) };
+}
+
+function trimHistoryDetails(h) {
+  let total = 0;
+  h.forEach(e => { if (e && Array.isArray(e.ch)) total += e.ch.length; });
+  for (let i = 0; i < h.length - 1 && total > HISTORY_CH_TOTAL; i++) {
+    const e = h[i];
+    if (!e || !Array.isArray(e.ch) || !e.ch.length) continue;
+    total -= e.ch.length;
+    delete e.ch; delete e.skip; delete e.chn;
+    e.chTrim = 1;
+  }
+}
+
+function histClip(s, n) {
+  s = String(s || '').replace(/\s+/g, ' ').trim();
+  return s.length > (n || 30) ? s.slice(0, n || 30) + '…' : s;
+}
+// 'YYYY-MM-DD' → '10/30（木）'。備考列は「備考欄」
+function histDay(d) {
+  if (d === '__note__') return '備考欄';
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(d || '');
+  if (!m) return d || '';
+  const dt = new Date(+m[1], +m[2] - 1, +m[3]);
+  return `${+m[2]}/${+m[3]}（${DAYS_JP[dt.getDay()]}）`;
+}
+// 色・区分・資格などのキー（'person:山田' / 'site:<id>' / 'person|山田|2026-07-27' / '山田'）を人が読める名前に
+function historyKeyName(k, siteName) {
+  const p = k.split('|');
+  if (p.length >= 3) return `${p[1]}（${histDay(p[2])}）`;
+  const i = k.indexOf(':');
+  if (i > 0) return k.slice(0, i) === 'site' ? siteName(k.slice(i + 1)) : k.slice(i + 1);
+  return k;
+}
+
+// 2つの盤面（_undoSnapshot を JSON.parse したもの）の違いを、履歴に残す変更の一覧にする。
+// 現場名・マグネット名はその時点のものを入れる（あとで名前を変えたり消したりしても読めるように）。
+function describeChanges(a, b) {
+  const out = [];
+  const isObj = v => v && typeof v === 'object' && !Array.isArray(v);
+  // board.json は他のアプリも書くので、形の崩れた要素（null 等）は読み飛ばす
+  const okSites = v => Array.isArray(v) ? v.filter(s => isObj(s) && s.id) : [];
+  const okFiles = s => Array.isArray(s.files) ? s.files.filter(isObj) : [];
+  const sitesA = okSites(a.sites), sitesB = okSites(b.sites);
+  const mapA = new Map(sitesA.map(s => [s.id, s])), mapB = new Map(sitesB.map(s => [s.id, s]));
+  const siteName = id => { const s = mapB.get(id) || mapA.get(id); return s ? (s.name || '（名前なし）') : '（削除した現場）'; };
+
+  // --- 現場 ---
+  const SITE_KNOWN = ['id', 'name', 'archived', 'archivedAt', 'period', 'memo', 'files'];
+  const siteRest = s => { const c = { ...s }; SITE_KNOWN.forEach(p => delete c[p]); return JSON.stringify(c); };
+  sitesB.forEach(s => {
+    const o = mapA.get(s.id);
+    const nm = s.name || '（名前なし）';
+    if (!o) { out.push({ k: 't', x: `現場「${nm}」を追加` }); return; }
+    if ((o.name || '') !== (s.name || '')) out.push({ k: 'sn', id: s.id, f: o.name || '', t: s.name || '' });
+    if (!!o.archived !== !!s.archived) out.push({ k: 't', x: `現場「${nm}」を${s.archived ? '完了にした' : '完了から戻した'}` });
+    if ((o.period || '') !== (s.period || '')) out.push({ k: 'sp', id: s.id, s: nm, v: histClip(s.period) });
+    if ((o.memo || '') !== (s.memo || '')) out.push({ k: 'sm', id: s.id, s: nm, v: histClip(s.memo) });
+    const fa = okFiles(o).map(f => f.id), fb = okFiles(s).map(f => f.id);
+    okFiles(s).filter(f => !fa.includes(f.id)).forEach(f => out.push({ k: 't', x: `現場「${nm}」にPDF「${f.name || ''}」を追加` }));
+    okFiles(o).filter(f => !fb.includes(f.id)).forEach(f => out.push({ k: 't', x: `現場「${nm}」のPDF「${f.name || ''}」を一覧から外した` }));
+    if (siteRest(o) !== siteRest(s)) out.push({ k: 't', x: `現場「${nm}」の設定を変更`, m: 1, id: s.id });
+  });
+  sitesA.forEach(o => { if (!mapB.has(o.id)) out.push({ k: 't', x: `現場「${o.name || '（名前なし）'}」を削除` }); });
+  const orderA = sitesA.filter(s => mapB.has(s.id)).map(s => s.id).join('\u0001');
+  const orderB = sitesB.filter(s => mapA.has(s.id)).map(s => s.id).join('\u0001');
+  if (orderA !== orderB) out.push({ k: 't', x: '現場の並び順を変更', m: 1 });
+
+  // --- プール（マグネットの名前一覧）---
+  // 名前を変えるとマス上の同じマグネットも一斉に変わるので、その分はマスの変更に出さない（renamed）
+  const la = isObj(a.labels) ? a.labels : {}, lb = isObj(b.labels) ? b.labels : {};
+  const renamed = {}, renamedNames = new Set();
+  new Set([...Object.keys(la), ...Object.keys(lb)]).forEach(ty => {
+    const xa = Array.isArray(la[ty]) ? la[ty] : [], xb = Array.isArray(lb[ty]) ? lb[ty] : [];
+    const added = xb.filter(l => !xa.includes(l)), removed = xa.filter(l => !xb.includes(l));
+    const T = HISTORY_LABEL_TYPE_JP[ty] || 'マグネット';
+    if (added.length === 1 && removed.length === 1) {
+      out.push({ k: 'ln', ty, f: removed[0], t: added[0] });
+      renamed[ty] = { from: removed[0], to: added[0] };
+      renamedNames.add(removed[0]); renamedNames.add(added[0]);
+    } else {
+      added.forEach(l => out.push({ k: 't', x: `${T}「${l}」をプールに追加` }));
+      removed.forEach(l => out.push({ k: 't', x: `${T}「${l}」をプールから削除` }));
+      if (!added.length && !removed.length && xa.join('\u0001') !== xb.join('\u0001')) out.push({ k: 't', x: `${T}の並び順を変更`, m: 1 });
+    }
+  });
+
+  // --- マス（配置・メモ）---
+  const cells = [];
+  const sa = isObj(a.schedule) ? a.schedule : {}, sb = isObj(b.schedule) ? b.schedule : {};
+  const siteOrder = new Map(sitesB.map((s, i) => [s.id, i]));
+  const keyOf = m => m.type + '\u0001' + m.label;
+  const EMPTY = {};
+  const mags = c => Array.isArray(c.magnets) ? c.magnets.filter(isObj) : [];
+  new Set([...Object.keys(sa), ...Object.keys(sb)]).forEach(sid => {
+    const ca = isObj(sa[sid]) ? sa[sid] : EMPTY, cb = isObj(sb[sid]) ? sb[sid] : EMPTY;
+    new Set([...Object.keys(ca), ...Object.keys(cb)]).forEach(d => {
+      // スナップショットには中身（マグネットかメモ）のあるマスしか無い。無いマスは EMPTY
+      const x = isObj(ca[d]) ? ca[d] : EMPTY, y = isObj(cb[d]) ? cb[d] : EMPTY;
+      const mx = mags(x), my = mags(y);
+      const base = { d, sid, s: siteName(sid), _o: siteOrder.has(sid) ? siteOrder.get(sid) : 99999 };
+      const same = mx.length === my.length && mx.every((m, i) => m.type === my[i].type && m.label === my[i].label);
+      if (!same) {
+        // 同じ名前が2つ置かれていることもあるので個数で比べる
+        const cnt = new Map();
+        mx.forEach(m => cnt.set(keyOf(m), (cnt.get(keyOf(m)) || 0) - 1));
+        my.forEach(m => cnt.set(keyOf(m), (cnt.get(keyOf(m)) || 0) + 1));
+        Object.keys(renamed).forEach(ty => {
+          const fk = ty + '\u0001' + renamed[ty].from, tk = ty + '\u0001' + renamed[ty].to;
+          const n = Math.min(-(cnt.get(fk) || 0), cnt.get(tk) || 0);
+          if (n > 0) { cnt.set(fk, cnt.get(fk) + n); cnt.set(tk, cnt.get(tk) - n); }
+        });
+        const add = [], rm = [];
+        cnt.forEach((v, k) => {
+          const sep = k.indexOf('\u0001');
+          const l = histMagKey(k.slice(0, sep), k.slice(sep + 1));
+          for (let i = 0; i < v; i++) add.push(l);
+          for (let i = 0; i < -v; i++) rm.push(l);
+        });
+        if (add.length || rm.length) cells.push({ ...base, a: add, r: rm });
+        else if (!Object.keys(renamed).length) cells.push({ ...base, k: 'o' });   // 並び順だけ
+      }
+      if ((x.note || '') !== (y.note || '')) {
+        cells.push({ ...base, k: 'n', ...histNoteFields(x.note, 'o', 'oh'), ...histNoteFields(y.note, 'v', 'vh') });
+      }
+      // 文字の色・大きさは、前後どちらも中身のあるマスの時だけ比べる
+      // （中身が空になったマスはスナップショットから消えるが、state には色・大きさだけ残るため）
+      if (x !== EMPTY && y !== EMPTY
+          && ((x.noteColor || '') !== (y.noteColor || '') || (x.noteSize || '') !== (y.noteSize || ''))) {
+        cells.push({ ...base, k: 'f' });
+      }
+    });
+  });
+  const dayKey = d => d === '__note__' ? '9999' : d;   // 備考欄は日付の後
+  cells.sort((p, q) => dayKey(p.d) < dayKey(q.d) ? -1 : dayKey(p.d) > dayKey(q.d) ? 1 : p._o - q._o);
+  if (cells.length > HISTORY_BULK_CELLS) {
+    const byDay = new Map();
+    cells.forEach(c => {
+      const g = byDay.get(c.d) || { sites: new Set(), a: 0, r: 0, n: 0 };
+      g.sites.add(c.sid);
+      if (!c.k) { g.a += c.a.length; g.r += c.r.length; }
+      if (c.k === 'n') g.n++;
+      byDay.set(c.d, g);
+    });
+    if (byDay.size > HISTORY_BULK_CELLS) {
+      out.push({ k: 't', x: `${byDay.size}日分・${new Set(cells.map(c => c.sid)).size}現場の配置やメモをまとめて変更` });
+    } else {
+      byDay.forEach((g, d) => {
+        const parts = [];
+        if (g.a) parts.push(`配置${g.a}`);
+        if (g.r) parts.push(`外す${g.r}`);
+        if (g.n) parts.push(`メモ${g.n}`);
+        out.push({ k: 't', x: `${histDay(d)} ${g.sites.size}現場をまとめて変更${parts.length ? `（${parts.join('・')}）` : ''}` });
+      });
+    }
+  } else {
+    cells.forEach(c => { delete c._o; out.push(c); });
+  }
+
+  // --- その他（色・区分・所属・資格・誕生日など）---
+  new Set([...Object.keys(a), ...Object.keys(b)]).forEach(key => {
+    if (HISTORY_SKIP_KEYS.has(key)) return;
+    const va = a[key], vb = b[key];
+    if (JSON.stringify(va) === JSON.stringify(vb)) return;
+    let names = [];
+    if (isObj(va) || isObj(vb)) {
+      const oa = isObj(va) ? va : {}, ob = isObj(vb) ? vb : {};
+      new Set([...Object.keys(oa), ...Object.keys(ob)]).forEach(k => {
+        if (JSON.stringify(oa[k]) !== JSON.stringify(ob[k])) names.push(historyKeyName(k, siteName));
+      });
+      names = [...new Set(names)].filter(n => !renamedNames.has(n));
+      if (!names.length && renamedNames.size) return;   // 名前を変えたのに付いて変わっただけ
+    }
+    const what = HISTORY_KEY_JP[key] || 'その他の設定';
+    const who = names.length ? '：' + names.slice(0, 4).join('、') + (names.length > 4 ? ` ほか${names.length - 4}件` : '') : '';
+    out.push({ k: 't', x: what + 'を変更' + who, m: 1 });
+  });
+  return out;
+}
+
+// 直前の保存（undo 履歴の末尾）からの変更内容。
+// 比べる元の盤面は前回 parse したものを使い回す（iPad で1回の保存に2回 parse しないように）。
+let _histBase = null;          // { snap, obj }
+let _historyOverride = null;   // 復元など、差分を並べるより一言の方が分かる操作の時に入れる
+function parsedSnap(snap) {
+  return (_histBase && _histBase.snap === snap) ? _histBase.obj : JSON.parse(snap);
+}
+function historyChangesSince(newSnap) {
+  if (_historyOverride) { const x = _historyOverride; _historyOverride = null; _histBase = null; return [{ k: 't', x }]; }
+  try {
+    const prev = _undoHistory.length ? _undoHistory[_undoHistory.length - 1] : null;
+    const next = JSON.parse(newSnap);
+    const out = prev ? describeChanges(parsedSnap(prev), next) : [];
+    _histBase = { snap: newSnap, obj: next };
+    return out;
+  } catch (e) {
+    console.error('[履歴] 変更内容の作成に失敗', e);
+    _histBase = null;
+    return [{ ...HISTORY_CH_FAILED }];
+  }
+}
+const HISTORY_CH_FAILED = { k: 't', x: '（この保存の変更内容は記録できませんでした）' };
+
 // 「この端末による実データ変更」の刻印＋履歴記録（saveState・undo から共通で呼ぶ）
-function stampEditor() {
+function stampEditor(changes, isUndo) {
   const name = deviceName || '名前未設定のPC';
   const now = Date.now();
   state._lastEditor = name;
   state._lastEditAt = now;
-  recordHistory(name, now);
+  recordHistory(name, now, changes, isUndo);
 }
 
 function openHistory() {
@@ -7421,10 +7741,12 @@ function openHistory() {
 function closeHistory() {
   document.getElementById('history-modal').classList.remove('show');
 }
+let _historyShown = [];   // 表示中の各行の記録（開いている間に他端末の更新で履歴が入れ替わっても、押した行の中身を出す）
 function renderHistory() {
   const el = document.getElementById('history-list');
   if (!el) return;
   const h = Array.isArray(state._history) ? state._history : [];
+  _historyShown = [];
   if (!h.length) { el.innerHTML = '<div class="history-empty">まだ編集履歴はありません。</div>'; return; }
   let html = '', lastDay = '';
   for (let i = h.length - 1; i >= 0; i--) {   // 新しい順
@@ -7433,10 +7755,150 @@ function renderHistory() {
     const day = `${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()}（${DAYS_JP[d.getDay()]}）`;
     if (day !== lastDay) { html += `<div class="history-day">${day}</div>`; lastDay = day; }
     const hm = ('0' + d.getHours()).slice(-2) + ':' + ('0' + d.getMinutes()).slice(-2);
-    const cnt = (e.count && e.count > 1) ? `<span class="h-count">${e.count}件の変更</span>` : '';
-    html += `<div class="history-item"><span class="h-time">${hm}</span><span class="h-dev">${escapeHtml(e.device || '不明な端末')}</span>${cnt}</div>`;
+    const idx = _historyShown.push(e) - 1;
+    html += `<div class="history-item" data-hi="${idx}"><span class="h-time">${hm}</span><span class="h-dev">${escapeHtml(e.device || '不明な端末')}</span>`
+      + `<button type="button" class="h-count">${Number(e.count) || 1}件の変更<span class="h-arrow">▸</span></button></div>`
+      + `<div class="history-detail" hidden></div>`;
   }
   el.innerHTML = html;
+}
+// 行（「○件の変更」）を押すと、その件の変更内容を開く・閉じる
+document.getElementById('history-list').addEventListener('click', (ev) => {
+  const row = ev.target.closest('.history-item');
+  if (!row) return;
+  const det = row.nextElementSibling;
+  if (!det || !det.classList.contains('history-detail')) return;
+  const open = !row.classList.contains('open');
+  row.classList.toggle('open', open);
+  if (open && !det.dataset.built) {
+    try {
+      det.innerHTML = historyDetailHtml(_historyShown[+row.dataset.hi]);
+    } catch (e) {   // 他のアプリや別の版が書いた、想定外の形の記録
+      console.error('[履歴] 変更内容の表示に失敗', e);
+      det.innerHTML = '<div class="hd-none">この件の変更内容は表示できませんでした。</div>';
+    }
+    det.dataset.built = '1';
+  }
+  det.hidden = !open;
+});
+
+function historyDetailHtml(e) {
+  if (!e) return '';
+  if (!Array.isArray(e.ch)) {
+    return `<div class="hd-none">${e.chTrim
+      ? '古い記録のため、変更内容は省きました。'
+      : '変更内容の記録はありません（この機能を入れる前の記録や、更新前の画面のままの端末・アプリ以外から書き込まれた記録です）。'}</div>`;
+  }
+  const lines = historyLines(e.ch);
+  let html = lines.length ? lines.map(l => `<div class="hd-line">${l}</div>`).join('')
+    : '<div class="hd-none">残っている変更はありません（置いてすぐ戻した場合や、画面に出ない内部のデータだけが変わった場合など）。</div>';
+  const skip = Number(e.skip) || 0;
+  if (skip > 0) html += `<div class="hd-note">初めの方の ${skip}件は省きました（1件に残すのは新しい方の${HISTORY_CH_PER_ENTRY}件までです）。</div>`;
+  // この機能の前の分や、古い版のアプリから同じ端末名で保存した分は、回数だけ数えられて中身が無い
+  const missing = (Number(e.count) || 1) - (Number(e.chn) || 0);
+  if (missing > 0) html += `<div class="hd-note">このうち ${missing}回分の保存は、変更内容が記録されていません（この機能を入れる前の分や、古い版のアプリからの保存）。</div>`;
+  return html;
+}
+
+// メモの変更を表示する形に。長いメモは、変わった所の前後だけを切り出す
+function histNoteExcerpt(o, v) {
+  const a = String(o || '').replace(/\s+/g, ' ').trim(), b = String(v || '').replace(/\s+/g, ' ').trim();
+  const W = 30;
+  if (a.length <= W && b.length <= W) return [a, b];
+  let p = 0;
+  while (p < a.length && p < b.length && a[p] === b[p]) p++;
+  const start = Math.max(0, p - 10);
+  const cut = s => (start > 0 ? '…' : '') + s.slice(start, start + W) + (s.length > start + W ? '…' : '');
+  return [cut(a), cut(b)];
+}
+
+// 記録した変更を1行ずつの HTML にする。
+// ドラッグでの移動は「置く」「外す」の2回の保存になるので、ここで「移動」の1行にまとめる。
+function historyLines(ch) {
+  const E = escapeHtml;
+  const items = (Array.isArray(ch) ? ch : [])
+    .filter(c => c && typeof c === 'object')
+    .map(c => c.k ? c : { ...c, a: Array.isArray(c.a) ? c.a.slice() : [], r: Array.isArray(c.r) ? c.r.slice() : [] });
+  const moves = items.map(() => []);
+  items.forEach((it, i) => {
+    if (it.k) return;
+    it.r.slice().forEach(l => {
+      let best = -1;
+      items.forEach((jt, j) => {
+        if (j === i || jt.k || (jt.u || 0) !== (it.u || 0) || !jt.a.includes(l)) return;
+        if (histSameCell(jt, it)) return;
+        const dist = Math.abs(i - j);
+        if (dist !== 1 && jt.d !== it.d) return;   // 隣り合う記録か、同じ日の別の現場
+        if (best < 0 || dist < Math.abs(i - best)) best = j;
+      });
+      if (best < 0) return;
+      const jt = items[best];
+      jt.a.splice(jt.a.indexOf(l), 1);
+      it.r.splice(it.r.indexOf(l), 1);
+      moves[Math.min(i, best)].push({ l, fd: it.d, fs: it.s, fsid: it.sid, td: jt.d, ts: jt.s, tsid: jt.sid, u: it.u });
+    });
+  });
+  const when = d => `<span class="hd-when">${E(histDay(d))}</span>`;
+  const site = s => `<span class="hd-site">${E(s)}</span>`;
+  const tag = t => `<span class="hd-tag">${t}</span>`;
+  const q = s => `「${E(s)}」`;
+  // 名前だけ出す。＋と−に同じ名前で別の種別（重機と機材など）がある時だけ種別を添える
+  const typeJP = k => {
+    const code = String(k).split(':')[0];
+    const ty = Object.keys(HIST_TYPE_CODE).find(t => HIST_TYPE_CODE[t] === code);
+    return ty ? HISTORY_LABEL_TYPE_JP[ty] : '';
+  };
+  const magNames = (list, other) => list.map(k => {
+    const l = histMagLabel(k);
+    const clash = other.some(o => o !== k && histMagLabel(o) === l) && typeJP(k);
+    return E(l) + (clash ? `（${typeJP(k)}）` : '');
+  }).join('・');
+  const out = [];
+  items.forEach((c, i) => {
+    const undo = c.u ? '<span class="hd-undo">↩ 元に戻す</span>' : '';
+    moves[i].forEach(m => {
+      const mu = m.u ? '<span class="hd-undo">↩ 元に戻す</span>' : '';
+      let body;
+      const ml = E(histMagLabel(m.l));
+      if (m.fd === m.td) body = `${when(m.fd)}<b>${ml}</b>：${E(m.fs)} → ${E(m.ts)}`;
+      else if (m.fsid ? m.fsid === m.tsid : m.fs === m.ts) body = `${site(m.fs)}<b>${ml}</b>：${E(histDay(m.fd))} → ${E(histDay(m.td))}`;
+      else body = `<b>${ml}</b>：${E(histDay(m.fd))} ${E(m.fs)} → ${E(histDay(m.td))} ${E(m.ts)}`;
+      out.push(mu + tag('移動') + body);
+    });
+    let body = '';
+    if (!c.k) {
+      if (!c.a.length && !c.r.length) return;
+      body = when(c.d) + site(c.s)
+        + (c.a.length ? `<span class="hd-add">＋ ${magNames(c.a, c.r)}</span>` : '')
+        + (c.r.length ? `<span class="hd-rm">− ${magNames(c.r, c.a)}</span>` : '');
+    } else if (c.k === 'n') {
+      const [o, v] = histNoteExcerpt(c.o, c.v);
+      body = when(c.d) + site(c.s) + tag('メモ')
+        + (!v ? `${q(o)} を消した`
+          : !o ? q(v)
+          : o !== v ? `${q(o)} → ${q(v)}`
+          : (c.oh || c.vh) ? `${q(o)} の後ろの方を変更`   // 記録した長さより後ろだけが違う
+          : `${q(o)} の空白・改行を変更`);
+    } else if (c.k === 'o') {
+      body = when(c.d) + site(c.s) + '並び順を変更';
+    } else if (c.k === 'f') {
+      body = when(c.d) + site(c.s) + 'メモの文字の色・大きさを変更';
+    } else if (c.k === 'sn') {
+      body = `現場名を変更：${q(c.f)} → ${q(c.t)}`;
+    } else if (c.k === 'sp') {
+      body = `現場${q(c.s)}の工期：` + (c.v ? q(c.v) : '消した');
+    } else if (c.k === 'sm') {
+      body = `現場${q(c.s)}の現場メモ（注意事項）：` + (c.v ? q(c.v) : '消した');
+    } else if (c.k === 'ln') {
+      body = `${HISTORY_LABEL_TYPE_JP[c.ty] || 'マグネット'}の名前を変更：${q(c.f)} → ${q(c.t)}`;
+    } else if (c.k === 't') {
+      body = E(c.x);
+    } else {
+      return;
+    }
+    out.push(undo + body);
+  });
+  return out;
 }
 document.getElementById('history-modal').addEventListener('click', (e) => {
   if (e.target.id === 'history-modal') closeHistory();
@@ -7810,9 +8272,11 @@ async function dbxAutoPullIfChanged() {
   if (JSON.stringify(remote) === JSON.stringify(state)) return; // 実際は同じ
   console.log('[Dropbox] 他端末の変更を反映 (rev:', remoteRev || '?', ')');
   state = remote;
+  // 比べる基準（undo）は描画より先に取り直す。描画中に入力中のメモ欄が消えて blur→保存が走ると、
+  // 取り込み前と比べてしまい、他端末の変更がこの端末の編集として履歴に残るため
+  resetUndo();
   _origSaveState();
   render();
-  resetUndo();
 }
 
 async function dbxManualPull() {
@@ -7821,9 +8285,9 @@ async function dbxManualPull() {
     if (!confirm('Dropboxから最新を取得してローカルを上書きしますか？')) return;
     keepLocalView(remote); // 見ている週・絞込はこの端末のまま
     state = remote;
+    resetUndo(); // 比べる基準は描画より先に取り直す（自動プルと同じ理由）
     _origSaveState(); // 取得だけの端末を最終更新者に刻まない＆再アップロードしない（自動プルと同じ挙動）
     render();
-    resetUndo();
     alert('最新データを取得しました');
   } else {
     alert('Dropboxにデータがありません');
@@ -7859,8 +8323,9 @@ saveState = function(forceSync) {
     _localPending = true;
   }
   if (_dataChanged) {
-    stampEditor(); // 最終更新の刻印＋編集履歴の記録
+    stampEditor(historyChangesSince(_snap)); // 最終更新の刻印＋編集履歴の記録（何を変えたかも）
   }
+  _historyOverride = null; // 復元で中身が同じだった時に、次の編集へ持ち越さない
   _origSaveState(); // localStorage へはいつでも保存する（この端末が見ていた週を覚えるため）
   if (_needSync) scheduleDbxAutoSave();
   recordUndo(_snap); // 計算済みスナップショットを渡して再走査を省く
@@ -7906,15 +8371,20 @@ function recordUndo(precomputed) {
 }
 function undo() {
   if (_undoHistory.length <= 1) return;
-  _undoHistory.pop();
+  const undone = _undoHistory.pop();
   const data = JSON.parse(_undoHistory[_undoHistory.length - 1]);
+  // 編集履歴に「元に戻す」で何が戻ったかを残す（data は state になる前に比べる）
+  let changes = [];
+  try { changes = describeChanges(parsedSnap(undone), data); }
+  catch (e) { console.error('[履歴] 変更内容の作成に失敗', e); changes = [{ ...HISTORY_CH_FAILED }]; }
+  _histBase = null;
   data.weekStart = state.weekStart;
   data.viewFilter = state.viewFilter;
   data._history = state._history; // 履歴はundoスナップショットに含まれないので引き継ぐ（消さない）
   state = data;
   // undo も「この端末による実データ変更」→ 最終更新の刻印＋履歴記録。
   // saveState は履歴末尾一致で刻まないため（_dataChanged=false）ここで明示的に呼ぶ。
-  stampEditor();
+  stampEditor(changes, true);
   saveState(true); // 内容は履歴末尾と一致するが、取り消した結果は必ず全端末へ送る
   render();
   updateUndoButton();
@@ -8178,6 +8648,7 @@ initNoteToolbar();
     if (remote) {
       keepLocalView(remote); // 起動時も、この端末が最後に見ていた週で開く
       state = remote;
+      resetUndo(); // 比べる基準は描画より先に取り直す（自動プルと同じ理由）
       _origSaveState();
       render();
     } else {
