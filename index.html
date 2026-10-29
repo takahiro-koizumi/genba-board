@@ -3061,7 +3061,7 @@
         <li><strong>緑＝閲覧中</strong> ／ <strong>オレンジ＝編集中</strong> を、端末名ごとに表示します。</li>
         <li><strong>2台以上が同時に編集中</strong>になると、赤色で「⚠ ○台が同時に編集中」と警告します。</li>
       </ul>
-      <div class="help-note">同時に編集すると、あとから保存した人の内容で上書きされることがあります。警告が出たら、声をかけ合って順番に編集してください。</div>
+      <div class="help-note">同時に編集しても、別々のマスや別々の人の変更は両方とも残ります（あとから保存した端末が、先に保存された分と合わせてから保存します）。ただし<strong>同じマスのメモや同じ人の配置を同時に違う内容に変えた</strong>ときは、あとから保存した端末の内容が残ります。警告が出たら、声をかけ合って順番に編集してください。</div>
 
       <h3 id="help-19">19. 編集履歴</h3>
       <p>ツールバーの <span class="hk">🕘 履歴</span>（または「最終更新: ○○」の文字）を押すと、いつ・どの端末が編集したかの記録が見られます。</p>
@@ -3443,6 +3443,7 @@ function loadState() {
       if (!obj.personBirthday) obj.personBirthday = {};
       if (!obj.cellMemo) obj.cellMemo = {};
       if (!obj.viewFilter) obj.viewFilter = 'all';
+      if (!obj.schedule || typeof obj.schedule !== 'object' || Array.isArray(obj.schedule)) obj.schedule = {};
       if (!obj.labels) obj.labels = { person: [], equipment: [], vehicle: [] };
       if (!obj.labels.equipment) obj.labels.equipment = [];
       if (!obj.labels.vehicle) obj.labels.vehicle = [];
@@ -3496,9 +3497,12 @@ function loadState() {
   return initialState();
 }
 
+// 端末（localStorage）への保存が通ったか。容量不足などで通らない間は、未送信の印を残さない
+// （古い盤面を「この端末の未送信の編集」として、次に開いた時にクラウドと合わせないため）
+var _localSaveOk = true;
 function saveState() {
-  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
-  catch(e){ console.error('Save failed', e); }
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); _localSaveOk = true; }
+  catch(e){ _localSaveOk = false; console.error('Save failed', e); }
 }
 
 function initialState() {
@@ -3847,8 +3851,10 @@ function renderGrid() {
     onUpdate: () => {
       // 完了現場は盤面に無いので、表示中の行だけ並べ替え、完了現場は元の絶対位置に残す
       // （月別集計の並べ替え setupMonthSortable と同じ考え方）
-      const ids = Array.from(grid.querySelectorAll('.site-row')).map(r => r.dataset.siteId);
       const idMap = Object.fromEntries(state.sites.map(s => [s.id, s]));
+      // 画面に残っていても、取り込みで消えた現場は数えない（描き直しを後回しにした間の並べ替えで、行がずれて
+      // 現場が二重になったり消えたりしないように。画面に無い＝他端末が足した現場は元の位置のまま）
+      const ids = Array.from(grid.querySelectorAll('.site-row')).map(r => r.dataset.siteId).filter(id => idMap[id]);
       const visible = new Set(ids);
       let vi = 0;
       state.sites = state.sites.map(s => visible.has(s.id) ? (idMap[ids[vi++]] || s) : s);
@@ -3896,6 +3902,7 @@ function makeCell(siteId, dateStr, rowCls) {
   list.dataset.siteId = siteId;
   list.dataset.date = dateStr;
   data.magnets.forEach(m => list.appendChild(makeMagnet(m, dateStr)));
+  list._renderedMagnets = data.magnets.map(m => ({ ...m }));   // 描いた時の中身（描画を後回しにした間の書き戻しに使う）
   cell.appendChild(list);
 
   const note = document.createElement('div');
@@ -3905,7 +3912,7 @@ function makeCell(siteId, dateStr, rowCls) {
   note.dataset.siteId = siteId;
   note.dataset.date = dateStr;
   styleNoteEl(note, data);
-  note.addEventListener('focus', () => showNoteToolbar(note));
+  note.addEventListener('focus', () => { note.dataset.orig = note.textContent; showNoteToolbar(note); });
   note.addEventListener('blur', onNoteBlur);
   cell.appendChild(note);
 
@@ -4050,8 +4057,12 @@ function renderPool() {
     touchStartThreshold: 4,
     draggable: '.magnet',
     onUpdate: () => {
-      const labels = Array.from(pool.querySelectorAll('.magnet')).map(el => el.dataset.label);
-      state.labels[activeTab] = labels;
+      // 画面に出ている名前だけ並べ替え、画面に無い名前（取り込みで他端末が足した等）は元の位置に残す
+      const cur = state.labels[activeTab] || [];
+      const shown = Array.from(pool.querySelectorAll('.magnet')).map(el => el.dataset.label).filter(l => cur.includes(l));
+      const shownSet = new Set(shown);
+      let vi = 0;
+      state.labels[activeTab] = cur.map(l => shownSet.has(l) ? shown[vi++] : l);
       saveState();
       render();
     },
@@ -4069,14 +4080,25 @@ function readCellFromDom(siteId, dateStr) {
   const list = document.querySelector(`.magnet-list[data-site-id="${siteId}"][data-date="${dateStr}"]`);
   if (!list) return;
   const data = getCellData(siteId, dateStr);
-  data.magnets = Array.from(list.querySelectorAll('.magnet')).map(el => ({
+  const domMagnets = Array.from(list.querySelectorAll('.magnet')).map(el => ({
     id: el.dataset.id || genId(),
     type: el.dataset.type,
     label: el.dataset.label,
   }));
+  // 他端末の変更を取り込んだのに描き直しを後回しにしている間（ドラッグ中など）は、画面のマスが古い。
+  // 画面でした変更（描いた時→今の画面）だけを今の state のマスに当てる（丸ごと書くと、取り込んだ変更が消えるため）
+  const rendered = list._renderedMagnets;
+  let next = domMagnets;
+  if (rendered && !boardEq(rendered, data.magnets)) {
+    const key = mergeListKey(rendered, domMagnets, data.magnets);
+    if (key) next = mergeList(rendered, domMagnets, data.magnets, key);
+  }
+  data.magnets = next;
+  // 次に比べる元は「今の画面」（描き直さずに同じマスを続けて操作した時、直前の自分の操作を他端末の変更と取り違えないため）
+  list._renderedMagnets = domMagnets.map(m => ({ ...m }));
   // Re-sync ids onto DOM (in case some came from pool clones)
   Array.from(list.querySelectorAll('.magnet')).forEach((el, i) => {
-    if (!el.dataset.id) el.dataset.id = data.magnets[i].id;
+    if (!el.dataset.id) el.dataset.id = domMagnets[i].id;
   });
 }
 
@@ -4255,8 +4277,14 @@ function resetCell(siteId, dateStr) {
 // ========== Events ==========
 function onNoteBlur(e) {
   const el = e.target;
+  // 触っただけで中身を変えていなければ書かない（他端末の変更を取り込んだ後に、古い画面の文字でメモを戻さないため）
+  if (el.dataset.orig !== undefined && el.textContent.trim() === el.dataset.orig.trim()) {
+    scheduleHideNoteToolbar();
+    return;
+  }
   const data = getCellData(el.dataset.siteId, el.dataset.date);
   data.note = el.textContent.trim();
+  el.dataset.orig = el.textContent;
   saveState();
   scheduleHideNoteToolbar();
 }
@@ -5286,6 +5314,7 @@ function importData() {
         if (!obj.sites || !obj.labels) throw new Error('形式が違います');
         state = obj;
         _historyOverride = 'バックアップファイルから復元';   // 編集履歴には差分の羅列でなくこの一言を残す
+        _forceReplace = !!dbxToken;   // 他の端末の保存とぶつかっても、合わせずに丸ごと置き換える
         saveState();
         render();
         resetUndo();
@@ -5301,6 +5330,7 @@ function resetAll() {
   if (!confirm('すべての配置・現場・マグネットを初期状態に戻します。よろしいですか？')) return;
   state = initialState();
   _historyOverride = 'すべてを初期状態に戻した';
+  _forceReplace = !!dbxToken;
   saveState();
   render();
 }
@@ -6477,6 +6507,12 @@ document.getElementById('help-modal').addEventListener('click', (e) => {
 // id はこの端末で「どこまで見たか」の目印なので、重複させない・後から変えない。
 // tag は 新機能 / 改善 / 修正 / お知らせ。文は現場の人が読んで分かる言葉で書く（中の仕組みの話は書かない）。
 const CHANGELOG = [
+  { id: '2026-10-29-sync-merge', date: '2026-10-29', tag: '修正', title: '他の端末の変更を取り込む瞬間に置いたマグネットが消えることがあったのを修正',
+    items: [
+      '他の端末の変更を取り込んでいる最中（1〜2秒）に置いた・外したマグネットや書いたメモが、取り込んだ盤面で上書きされて消えることがありました。今は両方の変更を合わせて残します。',
+      '2台がほぼ同時に保存したときも、あとから保存した端末が先に保存された分と合わせてから保存するので、先の端末の変更が消えなくなりました。同じマスのメモや同じ人の配置を同時に違う内容に変えたときは、あとから保存した方が残ります。',
+      '電波が悪くて保存できなかったときは、少し待って自動で送り直します。送れないまま画面を閉じても、次に開いたときに最新の盤面と合わせて送ります。',
+    ] },
   { id: '2026-10-29-history-detail', date: '2026-10-29', tag: '新機能', title: '編集履歴で、何を変更したかが見られるように',
     items: [
       '🕘 履歴の「○件の変更」を押すと、その時に何を変えたかが開きます。だれをどの現場に配置した・外した・移した、メモ、現場やプールの追加・名前の変更などが出ます。',
@@ -7452,7 +7488,7 @@ function recordHistory(name, now, changes, isUndo) {
     // chn＝変更内容まで記録した保存の回数。count との差は、この機能の前の分や古い版のアプリからの保存
     cur.chn = (Number(cur.chn) || 0) + 1;
   } else {
-    cur = { device: name, at: now, count: 1, ch: [], chn: 1 };
+    cur = { id: genId(), device: name, at: now, count: 1, ch: [], chn: 1 };   // id：端末どうしの保存を合わせる時に同じ件を見分ける
     h.push(cur);
     if (h.length > HISTORY_LIMIT) h.splice(0, h.length - HISTORY_LIMIT);
   }
@@ -7917,9 +7953,15 @@ function saveDbxFilePath() {
   if (!path.toLowerCase().endsWith('.json')) {
     if (!confirm(`「${path}」は .json で終わっていません。保存しますか？`)) return;
   }
+  const changed = path !== dbxFilePath;
+  if (changed && dbxHasUnsent()
+      && !confirm('まだクラウドに送っていない変更があります。保存先を変えると、その変更は送られずに新しい保存先の盤面を開きます。変えますか？')) return;
   localStorage.setItem('genba_dbx_file_path', path);
   dbxFilePath = path;
   document.getElementById('dbx-file-path').value = path;
+  // 前のファイルの版（rev）と本文で、別のファイルに送ったり合わせたりしないよう、同期の状態を消して取り込み直す
+  // （同じパスのまま保存し直しただけの時は何もしない＝未送信の変更を捨てない）
+  if (changed && dbxToken) { dbxResetSyncState(); runSyncExclusive(syncInitial); }
   alert('保存パスを更新しました: ' + path + '\n「↓最新取得」か「今すぐ同期」で動作確認してください。');
 }
 
@@ -8034,25 +8076,46 @@ async function dbxHandleCallback() {
   return true;
 }
 
-async function dbxRefreshToken() {
-  const refresh = localStorage.getItem('dbx_refresh');
-  if (!refresh) return false;
-  const resp = await fetch('https://api.dropboxapi.com/oauth2/token', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({
-      grant_type: 'refresh_token',
-      refresh_token: refresh,
-      client_id: DBX_APP_KEY,
-    }).toString(),
-  });
-  const data = await resp.json();
-  if (data.access_token) {
-    localStorage.setItem('dbx_token', data.access_token);
-    dbxToken = data.access_token;
-    return true;
-  }
-  return false;
+// トークンの更新。応答が来ないまま同期の順番待ちを止め続けないよう時間切れを付け、
+// 同時に頼まれた更新は1本にまとめる
+let _dbxRefreshing = null;
+function dbxRefreshToken() {
+  if (_dbxRefreshing) return _dbxRefreshing;
+  _dbxRefreshing = (async () => {
+    const refresh = localStorage.getItem('dbx_refresh');
+    if (!refresh) return false;
+    const sg = dbxSignal(DBX_META_TIMEOUT_MS);
+    let giveUp;
+    try {
+      const req = fetch('https://api.dropboxapi.com/oauth2/token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({
+          grant_type: 'refresh_token',
+          refresh_token: refresh,
+          client_id: DBX_APP_KEY,
+        }).toString(),
+        signal: sg.signal,
+      }).then(r => r.json());
+      req.catch(() => {});   // 見切った後の失敗は捨てる
+      // 中止に応えない通信でも待ち続けないよう、別のタイマーでも見切る
+      const timeout = new Promise((_, rej) => { giveUp = setTimeout(() => rej(new Error('時間切れ')), DBX_META_TIMEOUT_MS + 1000); });
+      const data = await Promise.race([req, timeout]);
+      if (data.access_token) {
+        localStorage.setItem('dbx_token', data.access_token);
+        dbxToken = data.access_token;
+        return true;
+      }
+      return false;
+    } catch (e) {
+      console.warn('[Dropbox] トークンの更新に失敗', e);
+      return false;
+    } finally {
+      clearTimeout(giveUp);
+      sg.done();
+    }
+  })();
+  return _dbxRefreshing.finally(() => { _dbxRefreshing = null; });
 }
 
 // Dropbox Business: チーム共有フォルダはチームスペース名前空間に存在する。
@@ -8091,6 +8154,7 @@ function dbxDisconnect() {
   dbxToken = null;
   dbxPathRoot = null;
   dbxLastSync = null;
+  dbxResetSyncState(); // つなぎ直した時は、起動時と同じ取り込みからやり直す
   renderPresence([]);
   updateDbxUI();
 }
@@ -8108,7 +8172,20 @@ function dbxRetryAfterMs(resp) {
   return Math.min(Math.max(isFinite(s) ? s * 1000 : 0, 500), 3000);
 }
 
-async function dbxApiCall(url, args, body) {
+// board.json の読み書きの時間切れ（固まった通信1本が、同期全体を止めたままにしないように）。
+// 遅い回線でも 800KB が届くよう長めにとる（送信はこの1.5倍）
+const DBX_BOARD_TIMEOUT_MS = 120000;
+const DBX_META_TIMEOUT_MS = 30000;
+// 時間切れか、外からの中止（parent）で止まる signal
+function dbxSignal(ms, parent) {
+  const ac = new AbortController();
+  const t = setTimeout(() => ac.abort(), ms);
+  const onAbort = () => ac.abort();
+  if (parent) { if (parent.aborted) ac.abort(); else parent.addEventListener('abort', onAbort, { once: true }); }
+  return { signal: ac.signal, done: () => { clearTimeout(t); if (parent) parent.removeEventListener('abort', onAbort); } };
+}
+
+async function dbxApiCall(url, args, body, opts) {
   if (!dbxToken) return null;
   // 注意: download(body無し)の時は Content-Type を送らない。
   // Dropbox は application/x-www-form-urlencoded を拒否する（iPad Safari/Edge が厳格に弾く）。
@@ -8120,7 +8197,7 @@ async function dbxApiCall(url, args, body) {
     };
     if (dbxPathRoot) headers['Dropbox-API-Path-Root'] = JSON.stringify({ '.tag': 'root', 'root': dbxPathRoot });
     if (body) headers['Content-Type'] = 'application/octet-stream';
-    return fetch(url, { method: 'POST', headers: headers, body: body || undefined });
+    return fetch(url, { method: 'POST', headers: headers, body: body || undefined, signal: opts && opts.signal });
   };
   let resp = await doFetch();
   if (resp.status === 401) {
@@ -8134,79 +8211,713 @@ async function dbxApiCall(url, args, body) {
   return resp;
 }
 
-async function dbxSave(silent) {
-  if (!dbxToken) { console.warn('[Dropbox] no token'); return false; }
-  try {
-    if (!silent) setDbxStatus('syncing', '保存中');
-    const resp = await dbxApiCall(
-      'https://content.dropboxapi.com/2/files/upload',
-      { path: dbxFilePath, mode: 'overwrite', mute: true, autorename: false },
-      JSON.stringify(state)
-    );
-    if (resp && resp.ok) {
-      const result = await resp.json().catch(() => null);
-      console.log('[Dropbox] saved to', result && result.path_display);
-      if (result && result.rev) _lastDbxRev = result.rev;
-      dbxLastSync = new Date().toLocaleTimeString('ja-JP');
-      setDbxStatus('connected', '同期 ' + dbxLastSync);
-      const info = document.getElementById('dbx-info');
-      if (info) info.textContent = '最終同期: ' + dbxLastSync + (result && result.path_display ? ` (${result.path_display})` : '');
-      _dbxPending = false;
-      return true;
-    } else {
-      const errText = resp ? await resp.text().catch(() => resp.statusText) : 'no response';
-      console.error('[Dropbox] save failed:', resp && resp.status, errText);
-      setDbxStatus('error', '失敗(' + (resp ? resp.status : '?') + ')');
-      const info = document.getElementById('dbx-info');
-      if (info) info.textContent = `エラー: HTTP ${resp ? resp.status : '?'} - ${errText.slice(0,200)}`;
-      return false;
+// ========== 盤面の3者マージ（取り込み・保存がぶつかった時に、両方の編集を残す）==========
+// base＝両方が最後に一致していた盤面、local＝この端末の今の盤面、remote＝クラウドの最新。
+// base からの local の変更と remote の変更を合わせる。同じ所を両方が違う値に変えた時は local（この端末で今した編集）を優先。
+function boardEq(a, b) { return a === b || JSON.stringify(a) === JSON.stringify(b); }
+function isPlainObj(v) { return !!v && typeof v === 'object' && !Array.isArray(v); }
+function merge3(b, l, r) {
+  if (boardEq(l, r)) return l;
+  if (boardEq(l, b)) return r;   // クラウドだけが変えた
+  if (boardEq(r, b)) return l;   // この端末だけが変えた
+  if (isPlainObj(l) && isPlainObj(r)) {   // 両方が変えた → キーごとに合わせる（undefined＝そのキーを消した）
+    const bo = isPlainObj(b) ? b : {};
+    const out = {};
+    [...Object.keys(l), ...Object.keys(r).filter(k => !(k in l))].forEach(k => {
+      const v = merge3(bo[k], l[k], r[k]);
+      if (v !== undefined) out[k] = v;
+    });
+    return out;
+  }
+  if (Array.isArray(l) && Array.isArray(r)) {
+    const bl = Array.isArray(b) ? b : [];
+    const key = mergeListKey(bl, l, r);
+    if (key) return mergeList(bl, l, r, key);
+  }
+  return l;   // 突き合わせられない形で両方が変えた → この端末を優先
+}
+// 配列を要素ごとに突き合わせられるか。{id} のオブジェクト（マグネット・現場・PDF）か、文字列・数値（プールの名前・資格番号）で、
+// どの配列にも重複が無い時だけ。重複がある時は突き合わせない（Map にすると重複が黙って消えるため）
+function mergeListKey(...arrs) {
+  const all = arrs.flat();
+  let key;
+  if (all.every(x => isPlainObj(x) && typeof x.id === 'string' && x.id)) key = x => 'i:' + x.id;
+  else if (all.every(x => typeof x === 'string' || typeof x === 'number')) key = x => typeof x + ':' + x;
+  else return null;
+  return arrs.every(a => new Set(a.map(key)).size === a.length) ? key : null;
+}
+function mergeList(b, l, r, key) {
+  const mb = new Map(b.map(x => [key(x), x])), ml = new Map(l.map(x => [key(x), x])), mr = new Map(r.map(x => [key(x), x]));
+  // 残すかどうか：片方で足した物は残す。base にあって片方で消した物は、もう片方で変えていなければ消す。
+  // 消した側と変えた側がぶつかった時はこの端末を優先（この端末が消したなら消す、変えたなら残す）
+  const keep = k => {
+    const inL = ml.has(k), inR = mr.has(k);
+    if (inL && inR) return true;
+    if (!mb.has(k)) return inL || inR;
+    if (!inL) return false;
+    return !boardEq(ml.get(k), mb.get(k));
+  };
+  const val = k => (ml.has(k) && mr.has(k)) ? merge3(mb.get(k), ml.get(k), mr.get(k)) : (ml.has(k) ? ml.get(k) : mr.get(k));
+  // 並び順：この端末が base から並べ替えていればこの端末の並び、そうでなければクラウドの並び
+  const lk = l.map(key), bk = b.map(key);
+  const lSet = new Set(lk), bSet = new Set(bk);
+  const localReordered = lk.filter(k => bSet.has(k)).join('\u0001') !== bk.filter(k => lSet.has(k)).join('\u0001');
+  const main = localReordered ? l : r, other = localReordered ? r : l;
+  const out = [], outKeys = [];
+  main.forEach(x => { const k = key(x); if (keep(k)) { out.push(val(k)); outKeys.push(k); } });
+  // もう片方だけにある物は、その並びで直前にある物の後ろへ差し込む
+  other.forEach((x, i) => {
+    const k = key(x);
+    if (outKeys.includes(k) || !keep(k)) return;
+    let pos = 0;
+    for (let j = i - 1; j >= 0; j--) {
+      const p = outKeys.indexOf(key(other[j]));
+      if (p >= 0) { pos = p + 1; break; }
     }
-  } catch(e) {
+    out.splice(pos, 0, val(k)); outKeys.splice(pos, 0, k);
+  });
+  return out;
+}
+// 編集履歴：この端末が足した・書き換えた件（base に無い件）を、クラウドの履歴に足す。
+// この端末が書き換えた元の件（base にあって手元に無い件）はクラウド側から外す。同じ件（id、無ければ端末＋時刻）は1つにする
+function mergeHistory(B, L, R) {
+  const arr = v => Array.isArray(v) ? v.filter(e => isPlainObj(e)) : [];
+  B = arr(B); L = arr(L); R = arr(R);
+  const js = e => JSON.stringify(e);
+  const bSet = new Set(B.map(js)), lSet = new Set(L.map(js));
+  const replaced = new Set(B.filter(e => !lSet.has(js(e))).map(js));
+  const byKey = new Map();
+  const put = e => {
+    const k = e.id ? 'i:' + e.id : 'd:' + (e.device || '') + '\u0001' + e.at;
+    const cur = byKey.get(k);
+    const n = Number(e.count) || 1, cn = cur ? (Number(cur.count) || 1) : 0;
+    if (!cur || n > cn || (n === cn && Array.isArray(e.ch) && !Array.isArray(cur.ch))) byKey.set(k, e);
+  };
+  R.filter(e => !replaced.has(js(e))).forEach(put);
+  L.filter(e => !bSet.has(js(e))).forEach(put);
+  const out = [...byKey.values()].sort((p, q) => (Number(p.at) || 0) - (Number(q.at) || 0));
+  return out.length > HISTORY_LIMIT ? out.slice(out.length - HISTORY_LIMIT) : out;
+}
+// 中身の無いマス（マグネットもメモも無く、ほかのキーも無い）と、それしか無い現場を除いた深い写し。
+// 描画のたびに空マスが足されるので、「マスが無い」と「空マス」を同じものとして扱う（マージで他端末の配置を消さないため）
+function boardNormalized(o) {
+  const c = JSON.parse(JSON.stringify(isPlainObj(o) ? o : {}));
+  dropEmptyCells(c.schedule);
+  return c;
+}
+function dropEmptyCells(sched) {
+  if (!isPlainObj(sched)) return;
+  Object.keys(sched).forEach(sid => {
+    const ss = sched[sid];
+    if (!isPlainObj(ss)) return;
+    Object.keys(ss).forEach(d => {
+      const cell = ss[d];
+      if (isPlainObj(cell) && !(Array.isArray(cell.magnets) && cell.magnets.length) && !cell.note
+          && Object.keys(cell).every(k => k === 'magnets' || k === 'note')) delete ss[d];
+    });
+    if (!Object.keys(ss).length) delete sched[sid];
+  });
+}
+// どれかの側にあるマスを、無い側にも空マスとして置く（合わせる前に）。
+// 「空にしたマス」が「マス（現場）ごと消した」扱いになると、同じマスへの他端末の配置が消えたり、
+// 他端末が外した人が戻ったりするため、マスは必ず中身（マグネット・メモ）どうしで合わせる
+function fillEmptyCells(boards) {
+  const keys = new Map();   // siteId → Set(date)
+  boards.forEach(o => {
+    if (!isPlainObj(o.schedule)) return;
+    Object.keys(o.schedule).forEach(sid => {
+      const ss = o.schedule[sid];
+      if (!isPlainObj(ss)) return;
+      const set = keys.get(sid) || keys.set(sid, new Set()).get(sid);
+      Object.keys(ss).forEach(d => set.add(d));
+    });
+  });
+  boards.forEach(o => {
+    if (!isPlainObj(o.schedule)) o.schedule = {};
+    keys.forEach((dates, sid) => {
+      if (!isPlainObj(o.schedule[sid])) o.schedule[sid] = {};
+      const ss = o.schedule[sid];
+      dates.forEach(d => { if (!isPlainObj(ss[d])) ss[d] = { magnets: [], note: '' }; });
+    });
+  });
+}
+// 比べる用（空マスと、端末ごとの表示状態を除く）
+function boardCompareJSON(o) {
+  const c = boardNormalized(o);
+  delete c.weekStart; delete c.viewFilter;
+  return JSON.stringify(c);
+}
+function boardMagnetsOf(o, fn) {   // 盤面のマグネットを全部たどる fn(magnet, siteId, date, cell)
+  if (!isPlainObj(o.schedule)) return;
+  Object.keys(o.schedule).forEach(sid => {
+    const ss = o.schedule[sid];
+    if (!isPlainObj(ss)) return;
+    Object.keys(ss).forEach(d => {
+      const c = ss[d];
+      if (isPlainObj(c) && Array.isArray(c.magnets)) c.magnets.forEach(m => { if (isPlainObj(m)) fn(m, sid, d, c); });
+    });
+  });
+}
+// 片方でプールの名前を変えたか。applyRename は labels[type] の同じ位置を書き換え、マス上の同じマグネットも一斉に改名する。
+// 消して別の人を足しただけの時に改名と取り違えないよう、base でその名前だったマグネットが、その側で新しい名前になっていることも見る
+function detectRenames(b, side) {
+  const out = [];
+  const lb = isPlainObj(b.labels) ? b.labels : {}, ls = isPlainObj(side.labels) ? side.labels : {};
+  Object.keys(lb).forEach(type => {
+    const xb = Array.isArray(lb[type]) ? lb[type] : [], xs = Array.isArray(ls[type]) ? ls[type] : [];
+    const added = xs.filter(x => !xb.includes(x));
+    if (!added.length) return;
+    xb.forEach((from, i) => {
+      if (xs.includes(from)) return;
+      const to = (added.length === 1 && xb.filter(x => !xs.includes(x)).length === 1) ? added[0] : xs[i];
+      if (!added.includes(to) || out.some(x => x.type === type && x.to === to)) return;
+      // マグネットでの裏付け：base でこの名前だったマグネットがあれば、その側では新しい名前になっていること
+      const ids = new Set();
+      boardMagnetsOf(b, m => { if (m.type === type && m.label === from && m.id) ids.add(m.id); });
+      if (ids.size) {
+        let renamed = 0, kept = 0;
+        boardMagnetsOf(side, m => {
+          if (m.type !== type || !ids.has(m.id)) return;
+          if (m.label === to) renamed++; else if (m.label === from) kept++;
+        });
+        if (!renamed || kept) return;
+      } else {
+        // 配置の無い名前は、色・区分などが旧名から新名へ同じ値のまま移っている時だけ改名とみなす（applyRename の跡）。
+        // 消して別の人を足しただけ（プールから消しても色・区分は残る）や、属性も無い名前は見分けられないので改名とみなさない
+        // （見逃しても、他端末の配置が旧名のまま残るだけ）
+        const attrs = [['labelColors', type + ':' + from, type + ':' + to]];
+        if (type === 'person') ['personKind', 'personAffil', 'personMemo', 'personBirthday', 'personQual'].forEach(k => attrs.push([k, from, to]));
+        let had = 0, stayed = 0, moved = 0;
+        attrs.forEach(([k, a, z]) => {
+          const bo = isPlainObj(b[k]) ? b[k] : {}, so = isPlainObj(side[k]) ? side[k] : {};
+          if (bo[a] === undefined) return;
+          had++;
+          if (so[a] !== undefined) stayed++;
+          else if (boardEq(so[z], bo[a])) moved++;
+        });
+        if (!had || stayed || !moved) return;
+      }
+      out.push({ type, from, to });
+    });
+  });
+  return out;
+}
+// applyRename と同じ書き換えを、写しの盤面にする（もう片方の側の改名を当て直す）
+function applyRenameToBoard(o, type, from, to) {
+  if (isPlainObj(o.labels) && Array.isArray(o.labels[type])) {
+    const arr = o.labels[type], i = arr.indexOf(from);
+    if (i >= 0) { if (arr.includes(to)) arr.splice(i, 1); else arr[i] = to; }
+  }
+  const mv = (obj, a, b) => {
+    if (!isPlainObj(obj) || obj[a] === undefined) return;
+    if (obj[b] === undefined) obj[b] = obj[a];
+    delete obj[a];
+  };
+  mv(o.labelColors, type + ':' + from, type + ':' + to);
+  if (type === 'person') ['personKind', 'personAffil', 'personMemo', 'personBirthday', 'personQual', 'personQualSrc'].forEach(k => mv(o[k], from, to));
+  boardMagnetsOf(o, m => { if (m.type === type && m.label === from) m.label = to; });
+}
+// マージで増えた二重を直す（今回の両側の変更で増えた分だけ。前からある重複には触らない）
+function fixMergeDuplicates(b, l, r, out) {
+  if (!isPlainObj(out.schedule)) return;
+  const cellOf = (o, sid, d) => isPlainObj(o.schedule) && isPlainObj(o.schedule[sid]) && isPlainObj(o.schedule[sid][d]) ? o.schedule[sid][d] : null;
+  // (a) 2台が同じマグネットを別の所へ動かした → 同じ id が2か所に。この端末で置いた所だけ残す
+  const places = o => {
+    const m = new Map();
+    boardMagnetsOf(o, (mg, sid, d) => { if (mg.id) (m.get(mg.id) || m.set(mg.id, []).get(mg.id)).push(sid + '\u0001' + d); });
+    return m;
+  };
+  const pb = places(b), pl = places(l);
+  places(out).forEach((ps, id) => {
+    const uniq = [...new Set(ps)];
+    if (uniq.length < 2 || (pb.get(id) || []).length >= 2) return;
+    const keepAt = (pl.get(id) || []).find(p => uniq.includes(p)) || uniq[0];
+    uniq.forEach(p => {
+      if (p === keepAt) return;
+      const [sid, d] = p.split('\u0001');
+      const c = cellOf(out, sid, d);
+      if (c) c.magnets = c.magnets.filter(mg => !(isPlainObj(mg) && mg.id === id));
+    });
+  });
+  // (b) 同じマスに、この端末とクラウドの両方が同じ物（種別＋名前）を足した → どちらか多い方の枚数まで減らす（日コピーの二重など）
+  Object.keys(out.schedule).forEach(sid => {
+    const ss = out.schedule[sid];
+    if (!isPlainObj(ss)) return;
+    Object.keys(ss).forEach(d => {
+      const c = ss[d];
+      if (!isPlainObj(c) || !Array.isArray(c.magnets) || c.magnets.length < 2) return;
+      const count = cell => {
+        const m = new Map();
+        (cell && Array.isArray(cell.magnets) ? cell.magnets : []).forEach(x => { if (isPlainObj(x)) { const k = x.type + '\u0001' + x.label; m.set(k, (m.get(k) || 0) + 1); } });
+        return m;
+      };
+      const cl = count(cellOf(l, sid, d)), cr = count(cellOf(r, sid, d));
+      const lc = cellOf(l, sid, d);
+      const localIds = new Set((lc && Array.isArray(lc.magnets) ? lc.magnets : []).map(x => isPlainObj(x) && x.id));
+      count(c).forEach((n, k) => {
+        let extra = n - Math.max(cl.get(k) || 0, cr.get(k) || 0);
+        if (extra <= 0) return;
+        // この端末に無い方（クラウドから来た方）から、後ろから外す
+        const idx = [];
+        c.magnets.forEach((x, i) => { if (isPlainObj(x) && x.type + '\u0001' + x.label === k && !localIds.has(x.id)) idx.push(i); });
+        const drop = new Set(idx.slice(-extra));
+        c.magnets = c.magnets.filter((x, i) => !drop.has(i));
+      });
+    });
+  });
+  // (c) 2台が同じ人を同じ日の別の現場へ付け替えた（一覧の付け替えやコピーでの移動は新しい id で足すので (a) では拾えない）
+  //     → 置かれている現場の数が、この端末・クラウドそれぞれの多い方を超えた分を、この端末に無い置き場所から外す。
+  //     協力業者（会社単位）と人員の備考欄（メモ用途）は、重複警告（findDuplicateOnDay）と同じく対象外
+  const isPartner = label => isPlainObj(out.personKind) && out.personKind[label] === 'partner';
+  const sitesOf = o => {
+    const m = new Map();
+    boardMagnetsOf(o, (mg, sid, d) => {
+      if (d === '__note__' && mg.type !== 'equipment' && mg.type !== 'vehicle') return;
+      if (mg.type === 'person' && isPartner(mg.label)) return;
+      const k = d + '\u0001' + mg.type + '\u0001' + mg.label;
+      (m.get(k) || m.set(k, new Set()).get(k)).add(sid);
+    });
+    return m;
+  };
+  const dl = sitesOf(l), dr = sitesOf(r);
+  sitesOf(out).forEach((sites, k) => {
+    const mine = dl.get(k) || new Set();
+    let extra = sites.size - Math.max(mine.size, (dr.get(k) || new Set()).size);
+    if (extra <= 0) return;
+    const [d, type, label] = k.split('\u0001');
+    [...sites].reverse().forEach(sid => {
+      if (extra <= 0 || mine.has(sid)) return;
+      const c = cellOf(out, sid, d);
+      if (!c) return;
+      c.magnets = c.magnets.filter(mg => !(isPlainObj(mg) && mg.type === type && mg.label === label));
+      extra--;
+    });
+  });
+}
+function mergeBoards(base, local, remote) {
+  const b = boardNormalized(base), l = boardNormalized(local), r = boardNormalized(remote);
+  // 改名はもう片方にも当ててから合わせる（旧名のマグネットが残る・外した人が新しい名前で戻る、を防ぐ）。
+  // 2台が同じ人を別の名前にした時は、この端末の名前にそろえる
+  const rl = detectRenames(b, l), rr = detectRenames(b, r);
+  rl.forEach(x => { applyRenameToBoard(b, x.type, x.from, x.to); applyRenameToBoard(r, x.type, x.from, x.to); });
+  rr.forEach(x => {
+    const mine = rl.find(y => y.type === x.type && y.from === x.from);
+    if (mine) { if (mine.to !== x.to) applyRenameToBoard(r, x.type, x.to, mine.to); }
+    else { applyRenameToBoard(b, x.type, x.from, x.to); applyRenameToBoard(l, x.type, x.from, x.to); }
+  });
+  fillEmptyCells([b, l, r]);
+  const out = { ...merge3(b, l, r) };
+  if (isPlainObj(out.schedule)) { out.schedule = { ...out.schedule }; dropEmptyCells(out.schedule); }
+  // 現場の削除は1つの単位：base にあって、どちらかの側で消した現場は、sites と配置（schedule）の両方から消す
+  // （削除は確認を出してからする操作なので、もう片方の同じ現場への編集より優先する）
+  const siteIds = o => new Set((Array.isArray(o.sites) ? o.sites : []).filter(isPlainObj).map(s => s.id));
+  const sb = siteIds(b), sl = siteIds(l), sr = siteIds(r);
+  sb.forEach(id => {
+    if (sl.has(id) && sr.has(id)) return;
+    if (Array.isArray(out.sites)) out.sites = out.sites.filter(s => !(isPlainObj(s) && s.id === id));
+    if (isPlainObj(out.schedule) && out.schedule[id] !== undefined) { out.schedule = { ...out.schedule }; delete out.schedule[id]; }
+  });
+  fixMergeDuplicates(b, l, r, out);
+  // 見ている週・絞込はこの端末のもの
+  ['weekStart', 'viewFilter'].forEach(k => { if (local[k] !== undefined) out[k] = local[k]; else delete out[k]; });
+  // 最終更新は新しい方
+  const newer = (Number(local._lastEditAt) || 0) >= (Number(remote._lastEditAt) || 0) ? local : remote;
+  ['_lastEditor', '_lastEditAt'].forEach(k => { if (newer[k] !== undefined) out[k] = newer[k]; else delete out[k]; });
+  const h = mergeHistory(b._history, l._history, r._history);
+  if (h.length) out._history = h; else delete out._history;
+  return out;
+}
+// 取り込んでよい盤面か。他のアプリや古い版が中身の欠けた board.json を書いた時に、その「削除」をマージで全端末へ広げないため。
+// localSites＝この端末の現場の数（これがあるのに空なら壊れている＝前から防いでいた形）。
+// 「現場が大きく減った」は見ない（裏に回っていた端末が、その間に他の端末が整理した分を「壊れた」と取り違え、古い盤面を書き戻すため）
+function boardLooksValid(o, localSites) {
+  if (!isPlainObj(o) || !Array.isArray(o.sites) || !isPlainObj(o.labels) || !isPlainObj(o.schedule)) return false;
+  if ((localSites || 0) > 0 && o.sites.length === 0) return false;
+  return true;
+}
+
+// ========== Dropbox 同期（取り込みと保存を1本にまとめ、順番に1つずつ走らせる）==========
+// ・保存は「この端末が最後に取り込んだ版（rev）のままなら上書き」（mode update）。他の端末が先に保存していると 409 になるので、
+//   最新を取り込んで両方の編集を合わせ（mergeBoards）、送り直す。後勝ちで他の端末の編集を黙って消さない。
+// ・取り込みの待ち時間にこの端末で編集した時も、丸ごと置き換えずに合わせる。
+// ・_lastDbxRev と _syncBaseText（その版の本文＝マージの base）は必ず一緒に更新する（片方だけ進むと保護が外れる）。
+// ・overwrite は使わない。ファイルが本当に無い時だけ add で作る（通信の失敗を「無い」と取り違えて全体を書き戻さない）。
+const DBX_UPLOAD_URL = 'https://content.dropboxapi.com/2/files/upload';
+const DBX_DOWNLOAD_URL = 'https://content.dropboxapi.com/2/files/download';
+const DBX_RETRY_DELAYS_MS = [5000, 15000, 60000];   // 保存に失敗した時の再送の間隔（だんだん延ばす）
+const SYNC_MARK_KEY = 'genba_sync_unsent';          // 未送信の変更を残したまま閉じた印
+const SYNC_REV_KEY = 'genba_sync_rev';              // 端末に残した盤面が、クラウドのどの版を元にしているか
+let _editGen = 0, _syncedGen = 0;   // 実データを変えるたびに増える番号／クラウドと一致した時点の番号。違えば未送信あり
+let _syncBaseText = null, _syncBaseRev = null, _syncBaseSites = 0;   // マージの base（その版の本文・rev・現場の数）
+let _ambiguousBody = null;          // 送ったが応答が届かなかった本文（実はクラウドに書けていたかを、次に取った時に見分ける）
+let _syncReady = false;             // 起動時の最初の取り込みが終わるまで、自動の取り込み・保存はしない
+let _syncTail = Promise.resolve(), _syncRunning = false, _syncQueued = null, _syncQueuedOpts = null;
+let _syncRetryTimer = null, _syncFailCount = 0, _syncInitRetry = null, _syncInitFails = 0;
+let _syncInitSnap = null, _syncInitGen = 0;   // 起動時の取り込みの最初の試みの時点の盤面と番号
+let _pullAbort = null;              // 取り込み中のダウンロード。画面を閉じる時は止めて、保存を先に出す
+let _forceReplace = false;          // 復元・初期化：ぶつかってもマージせず、この端末の内容で置き換える
+let _lastUploadError = '';
+
+function dbxDirty() { return _editGen !== _syncedGen; }
+function dbxHasUnsent() { return !!dbxToken && dbxDirty(); }
+// rev と base（本文）は必ずここで一緒に変える
+function setSyncBase(rev, text, sites) {
+  _lastDbxRev = rev || null;
+  _syncBaseText = text || null;
+  _syncBaseRev = text ? (rev || null) : null;
+  _syncBaseSites = text ? (sites || 0) : 0;
+}
+// 端末に残す印。base の版（rev）は、端末への盤面の保存が通った時だけ書く（盤面と版がずれないように）。
+// 未送信の印は、端末に盤面が残っている時だけ立てる
+function persistSyncMarker() {
+  try {
+    // 未送信が無ければ、端末への保存の成否に関係なく印を消す（全部送れた後に、古い盤面で合わせ直さないため）
+    if (!dbxHasUnsent()) localStorage.removeItem(SYNC_MARK_KEY);
+    if (!_localSaveOk) return;
+    if (_syncBaseRev) localStorage.setItem(SYNC_REV_KEY, JSON.stringify({ rev: _syncBaseRev, path: dbxFilePath }));
+    if (dbxHasUnsent()) localStorage.setItem(SYNC_MARK_KEY, JSON.stringify({ path: dbxFilePath }));
+  } catch (e) {}
+}
+function dbxResetSyncState() {
+  setSyncBase(null, null);
+  _syncReady = false; _syncInitSnap = null; _ambiguousBody = null;
+  _syncedGen = _editGen; _forceReplace = false;
+  try { localStorage.removeItem(SYNC_MARK_KEY); localStorage.removeItem(SYNC_REV_KEY); } catch (e) {}
+}
+function dbxErrSummary(text) { try { return String(JSON.parse(text).error_summary || ''); } catch (e) { return ''; } }
+function dbxShowSynced(pathDisplay) {
+  dbxLastSync = new Date().toLocaleTimeString('ja-JP');
+  setDbxStatus('connected', '同期 ' + dbxLastSync);
+  const info = document.getElementById('dbx-info');
+  if (info) info.textContent = '最終同期: ' + dbxLastSync + (pathDisplay ? ` (${pathDisplay})` : '');
+}
+function dbxShowError(label, detail) {
+  setDbxStatus('error', label);
+  const info = document.getElementById('dbx-info');
+  if (info && detail) info.textContent = 'エラー: ' + String(detail).slice(0, 200);
+}
+
+// 同期の処理は1本ずつ順番に（取り込みと保存が同時に走って互いの結果を上書きしないように）
+function runSyncExclusive(fn) {
+  const p = _syncTail.then(async () => {
+    _syncRunning = true;
+    try { return await fn(); } finally { _syncRunning = false; }
+  });
+  _syncTail = p.catch(() => {});
+  return p;
+}
+// 同期を1回頼む。まだ始まっていない同期があればそれに相乗りする。
+// poll（2秒ごとの確認）は、走っている・待っている同期があれば何もしない
+function syncNow(opts) {
+  if (!dbxToken || !_syncReady) return Promise.resolve();
+  const poll = !!(opts && opts.poll);
+  if (poll && (_syncRunning || _syncQueued)) return Promise.resolve();
+  if (_syncQueued) { if (!poll) _syncQueuedOpts.poll = false; return _syncQueued; }
+  const o = _syncQueuedOpts = { poll };
+  const p = _syncQueued = runSyncExclusive(async () => {
+    _syncQueued = null;
+    try { await syncOnce(o); }
+    catch (e) { console.error('[Dropbox] 同期エラー', e); scheduleSyncRetry('同期エラー', e && e.message); }
+  });
+  return p;
+}
+function scheduleSyncRetry(label, detail) {
+  dbxShowError(label || '未保存', detail);
+  if (_syncRetryTimer || !dbxToken) return;
+  const delay = DBX_RETRY_DELAYS_MS[Math.min(_syncFailCount, DBX_RETRY_DELAYS_MS.length - 1)];
+  _syncFailCount++;
+  _syncRetryTimer = setTimeout(() => { _syncRetryTimer = null; syncNow(); }, delay);
+}
+
+async function syncOnce(opts) {
+  for (let round = 0; round < 4; round++) {
+    if (!dbxToken) return;
+    if (dbxDirty()) {
+      // 送るのは保存の予約・再送・閉じる時・今すぐ同期に任せる（失敗中に2秒ごとに送り続けないため）
+      if (opts.poll) return;
+      if (!_lastDbxRev) {
+        // 元にした版が分からない → 先に最新を取ってから送る。本当に無い時だけ新しく作る
+        const f = await dbxFetchBoard();
+        if (f.kind === 'ok') { adoptFetched(f); continue; }
+        if (f.kind !== 'not_found' || !dbxPathRoot) { scheduleSyncRetry('取得失敗', f.message || '保存先が分かりません'); return; }
+      }
+      const u = await uploadBoard();
+      if (u === 'ok') return;   // 送っている間の編集は、その編集が予約した保存で送る
+      if (u !== 'conflict') { scheduleSyncRetry('未保存（再送待ち）', _lastUploadError); return; }
+      // 他の端末が先に保存していた → 最新を取り込んで合わせ、送り直す
+      console.warn('[Dropbox] 他の端末の保存とぶつかったので、最新と合わせて送り直す');
+      const f = await dbxFetchBoard();
+      if (f.kind === 'ok') { adoptFetched(f); continue; }
+      if (f.kind === 'not_found') { setSyncBase(null, null); continue; }
+      scheduleSyncRetry('取得失敗', f.message);
+      return;
+    }
+    // 未送信なし → 他の端末の更新があれば取り込む
+    const ac = _pullAbort = new AbortController();
+    try {
+      const rev = await dbxCheckRemoteRev(ac.signal);
+      if (rev && rev === _lastDbxRev) return;
+      const f = await dbxFetchBoard(null, ac.signal);
+      if (f.kind !== 'ok') return;   // 取れない時は次の確認に任せる
+      adoptFetched(f);
+      if (!dbxDirty()) return;       // 待っている間に編集していたら、合わせた結果を送る
+    } finally {
+      if (_pullAbort === ac) _pullAbort = null;
+    }
+  }
+  scheduleSyncRetry('未保存（再送待ち）', '他の端末の保存と何度もぶつかりました');
+}
+// 取ってきた盤面を受け取る。応答が届かなかった自分の保存が、実はクラウドに書けていたのなら、
+// それを base にする（マージに回すと、その後に外した物が「他端末が足した物」として戻ってしまうため）
+function adoptFetched(f) {
+  if (_ambiguousBody !== null && f.text === _ambiguousBody) {
+    console.log('[Dropbox] 応答が届かなかった保存は、クラウドに書けていた (rev:', f.rev, ')');
+    _ambiguousBody = null;
+    setSyncBase(f.rev, f.text, Array.isArray(f.json.sites) ? f.json.sites.length : 0);
+    persistSyncMarker();
+    return;
+  }
+  if (_ambiguousBody !== null) {
+    // 他の端末がその上に保存していても、送った本文の最後の履歴の件が入っていれば、自分の保存は書けていた
+    // → 送った本文を base にして合わせる（古い base のままだと、その後に外した物が「他端末が足した物」として戻る）
+    try {
+      const sent = JSON.parse(_ambiguousBody);
+      const sh = Array.isArray(sent._history) ? sent._history : [];
+      const last = sh[sh.length - 1];
+      const rh = Array.isArray(f.json._history) ? f.json._history : [];
+      if (isPlainObj(last) && last.id
+          && rh.some(e => isPlainObj(e) && e.id === last.id && (Number(e.count) || 1) >= (Number(last.count) || 1))) {
+        console.log('[Dropbox] 応答が届かなかった保存は、クラウドに書けていた（その上に他の端末の保存あり）');
+        setSyncBase(_lastDbxRev, _ambiguousBody, Array.isArray(sent.sites) ? sent.sites.length : 0);
+      }
+    } catch (e) {}
+    _ambiguousBody = null;
+  }
+  adoptRemote(f);
+}
+
+async function uploadBoard() {
+  const gen = _editGen;
+  const body = JSON.stringify(state);
+  const sites = Array.isArray(state.sites) ? state.sites.length : 0;
+  const mode = _lastDbxRev ? { '.tag': 'update', update: _lastDbxRev } : 'add';
+  const sg = dbxSignal(DBX_BOARD_TIMEOUT_MS * 1.5);   // 800KB 近くあるので長めに
+  try {
+    const resp = await dbxApiCall(DBX_UPLOAD_URL, { path: dbxFilePath, mode, mute: true, autorename: false }, body, { signal: sg.signal });
+    if (!resp) { _lastUploadError = '未接続'; return 'error'; }
+    if (resp.ok) {
+      const result = await resp.json().catch(() => null);
+      _syncedGen = gen;
+      _forceReplace = false;
+      _ambiguousBody = null;
+      _syncFailCount = 0;
+      if (result && result.rev) setSyncBase(result.rev, body, sites);
+      else setSyncBase(null, null);   // 送れたが版が分からない → 次の確認で取り直す
+      persistSyncMarker();
+      console.log('[Dropbox] saved to', result && result.path_display);
+      dbxShowSynced(result && result.path_display);
+      return 'ok';
+    }
+    const errText = await resp.text().catch(() => '');
+    // rev が合わない時だけ 'path/conflict/file/…'（末尾の . の数は不定。file_ancestor と取り違えないよう / まで見る）
+    if (resp.status === 409 && dbxErrSummary(errText).startsWith('path/conflict/file/')) return 'conflict';
+    console.error('[Dropbox] save failed:', resp.status, errText);
+    _lastUploadError = `HTTP ${resp.status} ${dbxErrSummary(errText) || errText.slice(0, 120)}`;
+    return 'error';
+  } catch (e) {
+    // 通信が切れた・時間切れ：クラウドに書けたかどうか分からない。次に取った時に見分ける
+    _ambiguousBody = body;
     console.error('[Dropbox] save error:', e);
-    setDbxStatus('error', 'エラー');
-    const info = document.getElementById('dbx-info');
-    if (info) info.textContent = 'エラー: ' + e.message;
-    return false;
+    _lastUploadError = e && e.name === 'AbortError' ? '時間切れ' : String(e && e.message || e);
+    return 'error';
+  } finally {
+    sg.done();
   }
 }
 
-async function dbxLoad(silent) {
-  if (!dbxToken) { console.warn('[Dropbox] load: no token'); return null; }
+// board.json を取る。グローバルは変えない（rev と本文は、取り込んだ側が必ず一緒に採用する）。
+// 戻り値: {kind:'ok', json, text, rev} / {kind:'not_found'} / {kind:'error', message}
+async function dbxFetchBoard(path, signal) {
+  if (!dbxToken) return { kind: 'error', message: '未接続' };
+  const sg = dbxSignal(DBX_BOARD_TIMEOUT_MS, signal);
   try {
-    if (!silent) setDbxStatus('syncing', '取得中');
-    const resp = await dbxApiCall(
-      'https://content.dropboxapi.com/2/files/download',
-      { path: dbxFilePath },
-      null
-    );
-    if (resp && resp.ok) {
-      const json = await resp.json();
-      const apiResult = resp.headers.get('Dropbox-API-Result');
-      if (apiResult) {
-        try { const m = JSON.parse(apiResult); if (m.rev) _lastDbxRev = m.rev; } catch(e) {}
-      }
-      dbxLastSync = new Date().toLocaleTimeString('ja-JP');
-      setDbxStatus('connected', '同期 ' + dbxLastSync);
-      console.log('[Dropbox] loaded board.json');
-      return json;
-    } else if (resp && resp.status === 409) {
-      // ファイルなし
-      if (!silent) setDbxStatus('connected', '初回');
-      console.log('[Dropbox] no file yet');
-      return null;
-    } else {
-      const errText = resp ? await resp.text().catch(() => resp.statusText) : 'no response';
-      console.error('[Dropbox] load failed:', resp && resp.status, errText);
-      setDbxStatus('error', '取得失敗(' + (resp ? resp.status : '?') + ')');
-      const info = document.getElementById('dbx-info');
-      if (info) info.textContent = `エラー: HTTP ${resp ? resp.status : '?'} - ${errText.slice(0,200)}`;
-      return null;
+    const resp = await dbxApiCall(DBX_DOWNLOAD_URL, { path: path || dbxFilePath }, null, { signal: sg.signal });
+    if (!resp) return { kind: 'error', message: '未接続' };
+    if (resp.ok) {
+      const text = await resp.text();
+      let rev = null;
+      try { const m = JSON.parse(resp.headers.get('Dropbox-API-Result') || 'null'); rev = m && m.rev; } catch (e) {}
+      if (!rev) return { kind: 'error', message: '版（rev）が読めません' };
+      return { kind: 'ok', json: JSON.parse(text), text, rev };
     }
-  } catch(e) {
-    console.error('[Dropbox] load error:', e);
-    setDbxStatus('error', 'エラー');
-    return null;
+    const errText = await resp.text().catch(() => '');
+    if (resp.status === 409 && dbxErrSummary(errText).startsWith('path/not_found')) return { kind: 'not_found' };
+    console.error('[Dropbox] load failed:', resp.status, errText);
+    return { kind: 'error', message: `HTTP ${resp.status} ${dbxErrSummary(errText) || errText.slice(0, 120)}` };
+  } catch (e) {
+    if (!(e && e.name === 'AbortError')) console.error('[Dropbox] load error:', e);
+    return { kind: 'error', message: e && e.name === 'AbortError' ? '時間切れ／中断' : String(e && e.message || e) };
+  } finally {
+    sg.done();
   }
+}
+
+// クラウドの盤面 f を取り込む。この端末に未送信の変更があれば、両方の編集を合わせる
+function adoptRemote(f) {
+  const remote = f.json;
+  if (!boardLooksValid(remote, state.sites.length)) {
+    console.warn('[Dropbox] クラウドの盤面が空か壊れているため取り込まない（次の保存でこの端末の盤面を書き戻す）');
+    dbxShowError('空データ検出 手動取得推奨');
+    _lastDbxRev = f.rev;   // 本文（base）は取り込まない。この版の上に、この端末の盤面を送れるようにする
+    return;
+  }
+  const dirty = dbxDirty();
+  if (dirty && _forceReplace) {   // 復元・初期化：マージせず、最新の版の上にこの端末の内容をそのまま送る
+    setSyncBase(f.rev, f.text, remote.sites.length);
+    persistSyncMarker();
+    return;
+  }
+  let next;
+  if (dirty) {
+    let base = null;
+    try { base = _syncBaseText ? JSON.parse(_syncBaseText) : null; } catch (e) {}
+    try {
+      next = mergeBoards(base, state, remote);
+    } catch (e) {
+      dbxShowError('マージ失敗', e && e.message);
+      throw e;
+    }
+    if (boardCompareJSON(next) === boardCompareJSON(remote)) _syncedGen = _editGen;   // 合わせた結果がクラウドと同じなら送らない
+    console.log('[Dropbox] 他の端末の変更と、この端末の未送信の変更を合わせました (rev:', f.rev, ')');
+  } else {
+    next = keepLocalView(remote); // 週・絞込はこの端末のものを維持（比較の前に合わせる＝表示状態だけの差分では再描画しない）
+    if (JSON.stringify(next) === JSON.stringify(state)) {   // 実際は同じ
+      setSyncBase(f.rev, f.text, remote.sites.length);
+      persistSyncMarker();
+      return;
+    }
+    console.log('[Dropbox] 他端末の変更を反映 (rev:', f.rev, ')');
+  }
+  state = next;
+  setSyncBase(f.rev, f.text, remote.sites.length);
+  // 比べる基準（undo）は描画より先に取り直す。描画中に入力中のメモ欄が消えて blur→保存が走ると、
+  // 取り込み前と比べてしまい、他端末の変更がこの端末の編集として履歴に残るため
+  resetUndo();
+  _origSaveState();
+  persistSyncMarker();
+  dbxShowSynced();
+  renderSoon();
+}
+
+// 描画は、ドラッグ中・盤面のメモや工期の入力中は終わるまで待つ
+// （作り直すとドラッグが黙って取り消され、書きかけのメモが消えるため）。
+// 待っている間に画面でした変更は、readCellFromDom・並べ替えの側で、今の state に当てる形で書く
+let _renderDeferred = false;
+function boardInteracting() {
+  if (typeof Sortable !== 'undefined' && Sortable.active) return true;
+  if (document.querySelector('.copy-drag-ghost')) return true;
+  const a = document.activeElement;
+  if (!a || !a.closest || !a.closest('#grid')) return false;
+  if (a.isContentEditable) return true;
+  return /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName) && !a.readOnly && !a.disabled;   // 閲覧中の読み取り専用の欄は数えない
+}
+function renderSoon() {
+  if (boardInteracting()) { _renderDeferred = true; return; }
+  _renderDeferred = false;
+  render();
+}
+function flushDeferredRender() {
+  if (_renderDeferred && !boardInteracting()) { _renderDeferred = false; render(); }
+}
+['pointerup', 'pointercancel', 'touchend', 'focusout'].forEach(type => document.addEventListener(type, () => {
+  if (_renderDeferred) setTimeout(flushDeferredRender, 60);
+}, true));
+
+// 起動時（と保存先を変えた時）の最初の取り込み。終わるまで自動の取り込み・保存はしない
+async function syncInitial() {
+  if (!dbxToken || _syncReady) return;
+  setDbxStatus('syncing', '取得中');
+  // 取り込みを待つ間（失敗してやり直している間も含む）にこの端末で編集した時の base。最初の試みの時点の盤面
+  if (_syncInitSnap === null) { _syncInitSnap = JSON.stringify(state); _syncInitGen = _editGen; }
+  const startGen = _syncInitGen, startSnap = _syncInitSnap;
+  // 端末に残した盤面の元の版と、未送信の印（前回、送りきれないまま閉じた変更／起動してから送れていない変更）
+  let mark = null, rk = null;
+  try { mark = JSON.parse(localStorage.getItem(SYNC_MARK_KEY) || 'null'); } catch (e) {}
+  try { rk = JSON.parse(localStorage.getItem(SYNC_REV_KEY) || 'null'); } catch (e) {}
+  const unsent = isPlainObj(mark) && mark.path === dbxFilePath;
+  const baseRev = isPlainObj(rk) && rk.path === dbxFilePath && rk.rev ? String(rk.rev) : null;
+  const f = await dbxFetchBoard();
+  if (f.kind === 'not_found') {
+    if (!dbxPathRoot) return retrySyncInitial('取得失敗', '保存先（チームの領域）が分かりません');
+    // まだ board.json が無い → この端末の盤面で新しく作る（add。誰かが先に作っていたら取り込んで合わせる）
+    console.log('[Dropbox] no file yet → この端末の盤面で作る');
+    setSyncBase(null, null);
+    _editGen++;
+    _syncReady = true; _syncInitSnap = null;
+    persistSyncMarker();
+    syncNow();
+    return;
+  }
+  if (f.kind !== 'ok') return retrySyncInitial('取得失敗', f.message);
+  _syncInitFails = 0;
+  _syncReady = true; _syncInitSnap = null;
+  if (!boardLooksValid(f.json, state.sites.length)) {
+    console.warn('[Dropbox] 起動時: クラウドの盤面が空か壊れているため取り込まない');
+    dbxShowError('空データ検出 手動取得推奨');
+    _lastDbxRev = f.rev;
+    return;
+  }
+  // 未送信がある → 端末の盤面の元の版（baseRev）を取って、最新と合わせる
+  let base = null;
+  if (unsent && baseRev) {
+    if (baseRev === f.rev) base = f.json;
+    else {
+      const fb = await dbxFetchBoard('rev:' + baseRev);
+      if (fb.kind === 'ok') base = fb.json;
+    }
+    // この端末の盤面の方が欠けている（元の版には現場があるのに空）時は合わせない
+    if (base && !boardLooksValid(state, Array.isArray(base.sites) ? base.sites.length : 0)) base = null;
+  }
+  if (!base && _editGen !== startGen) {   // 元の版が分からなくても、取り込みを待つ間にこの端末で編集した分は合わせる
+    try { base = JSON.parse(startSnap); } catch (e) {}
+  }
+  if (unsent && !base) {
+    console.warn('[Dropbox] 未送信の変更を、クラウドの最新と合わせられなかった');
+    alert('この端末で保存しきれていなかった変更がありましたが、クラウドの最新と合わせられなかったため、最新の盤面を表示します。');
+  }
+  if (base) {
+    state = mergeBoards(base, state, f.json);
+    _editGen++;   // 合わせた結果を送る
+    if (boardCompareJSON(state) === boardCompareJSON(f.json)) _syncedGen = _editGen;
+  } else {
+    state = keepLocalView(f.json); // 起動時も、この端末が最後に見ていた週で開く
+    _syncedGen = _editGen;
+  }
+  setSyncBase(f.rev, f.text, f.json.sites.length);
+  resetUndo(); // 比べる基準は描画より先に取り直す（取り込みと同じ理由）
+  _origSaveState();
+  persistSyncMarker();
+  dbxShowSynced();
+  render();
+  if (dbxDirty()) syncNow();
+}
+function retrySyncInitial(label, detail) {
+  dbxShowError(label, detail);
+  const delay = DBX_RETRY_DELAYS_MS[Math.min(_syncInitFails++, DBX_RETRY_DELAYS_MS.length - 1)];
+  if (_syncInitRetry) clearTimeout(_syncInitRetry);
+  _syncInitRetry = setTimeout(() => { _syncInitRetry = null; if (dbxToken && !_syncReady) runSyncExclusive(syncInitial); }, delay);
+}
+
+// 今すぐ同期する（未送信があれば送り、無ければ最新を確かめる）。今すぐ同期ボタン・画面を閉じる時に使う
+async function dbxSave(silent) {
+  if (!dbxToken) { console.warn('[Dropbox] no token'); return false; }
+  if (dbxAutoSaveTimer) { clearTimeout(dbxAutoSaveTimer); dbxAutoSaveTimer = null; }
+  if (!silent) setDbxStatus('syncing', '保存中');
+  if (!_syncReady) await runSyncExclusive(syncInitial);
+  await syncNow();
+  const ok = _syncReady && !dbxDirty();
+  if (ok && !silent) dbxShowSynced();   // 送る物が無く最新だった時も「保存中」のままにしない
+  return ok;
 }
 
 async function dbxManualSync() {
@@ -8215,19 +8926,23 @@ async function dbxManualSync() {
 }
 
 // 他端末からの更新を検知するために rev だけ軽量に問い合わせる
-async function dbxCheckRemoteRev() {
+async function dbxCheckRemoteRev(signal) {
   if (!dbxToken) return null;
+  const sg = dbxSignal(DBX_META_TIMEOUT_MS, signal);
   try {
-    const metaHeaders = {
-      'Authorization': 'Bearer ' + dbxToken,
-      'Content-Type': 'application/json',
+    const doFetch = () => {   // ヘッダは毎回作る（401リフレッシュ後に新トークンで再送するため）
+      const metaHeaders = {
+        'Authorization': 'Bearer ' + dbxToken,
+        'Content-Type': 'application/json',
+      };
+      if (dbxPathRoot) metaHeaders['Dropbox-API-Path-Root'] = JSON.stringify({ '.tag': 'root', 'root': dbxPathRoot });
+      return fetch('https://api.dropboxapi.com/2/files/get_metadata', {
+        method: 'POST',
+        headers: metaHeaders,
+        body: JSON.stringify({ path: dbxFilePath }),
+        signal: sg.signal,
+      });
     };
-    if (dbxPathRoot) metaHeaders['Dropbox-API-Path-Root'] = JSON.stringify({ '.tag': 'root', 'root': dbxPathRoot });
-    const doFetch = () => fetch('https://api.dropboxapi.com/2/files/get_metadata', {
-      method: 'POST',
-      headers: metaHeaders,
-      body: JSON.stringify({ path: dbxFilePath })
-    });
     let resp = await doFetch();
     if (resp.status === 401) {
       const ok = await dbxRefreshToken();
@@ -8238,6 +8953,8 @@ async function dbxCheckRemoteRev() {
     return meta.rev || null;
   } catch(e) {
     return null;
+  } finally {
+    sg.done();
   }
 }
 
@@ -8251,59 +8968,48 @@ function keepLocalView(remote) {
   return remote;
 }
 
-// 他端末（iPad等）で更新があったら自動で取り込んで画面に反映
-async function dbxAutoPullIfChanged() {
-  if (!dbxToken) return;
-  if (_dbxPending) return; // 未送信のローカル変更がある時は上書きしない
+// 他端末（iPad等）で更新があったら自動で取り込んで画面に反映（2秒ごと・画面に戻った時・フォーカス時）
+function dbxAutoPullIfChanged() {
+  flushDeferredRender();   // 後回しにした描画が、きっかけを逃して残っていれば描く
+  if (!dbxToken || !_syncReady) return;
   if (document.visibilityState !== 'visible') return;
-  // メタデータ軽量チェック：確実に同じ rev ならスキップ
-  const remoteRev = await dbxCheckRemoteRev();
-  if (remoteRev && _lastDbxRev && remoteRev === _lastDbxRev) return;
-  // 変化の可能性あり → silent download して内容を比較（CORS で rev 読めない端末でも検知できる）
-  const remote = await dbxLoad(true);
-  if (!remote) return;
-  // 空データ上書き防御：リモートのsitesが空でローカルにあれば自動pull中止
-  if (Array.isArray(remote.sites) && remote.sites.length === 0 && Array.isArray(state.sites) && state.sites.length > 0) {
-    console.warn('[Dropbox] Remote sites empty but local has data. Auto-pull skipped.');
-    if (typeof setDbxStatus === 'function') setDbxStatus('error', '空データ検出 手動取得推奨');
-    return;
-  }
-  keepLocalView(remote); // 週・絞込はこの端末のものを維持（比較の前に合わせる＝表示状態だけの差分では再描画しない）
-  if (JSON.stringify(remote) === JSON.stringify(state)) return; // 実際は同じ
-  console.log('[Dropbox] 他端末の変更を反映 (rev:', remoteRev || '?', ')');
-  state = remote;
-  // 比べる基準（undo）は描画より先に取り直す。描画中に入力中のメモ欄が消えて blur→保存が走ると、
-  // 取り込み前と比べてしまい、他端末の変更がこの端末の編集として履歴に残るため
-  resetUndo();
-  _origSaveState();
-  render();
+  return syncNow({ poll: true });
 }
 
 async function dbxManualPull() {
-  const remote = await dbxLoad();
-  if (remote) {
+  if (!dbxToken) return;
+  return runSyncExclusive(async () => {
+    const f = await dbxFetchBoard();
+    if (f.kind === 'not_found') { alert('Dropboxにデータがありません'); return; }
+    if (f.kind !== 'ok') { alert('Dropboxから取得できませんでした（' + (f.message || '') + '）'); return; }
+    if (!boardLooksValid(f.json, state.sites.length)
+        && !confirm('Dropboxの盤面は、現場が空か形が壊れています。それでも取り込みますか？')) return;
     if (!confirm('Dropboxから最新を取得してローカルを上書きしますか？')) return;
-    keepLocalView(remote); // 見ている週・絞込はこの端末のまま
-    state = remote;
+    keepLocalView(f.json); // 見ている週・絞込はこの端末のまま
+    if (!isPlainObj(f.json.schedule)) f.json.schedule = {};
+    if (!Array.isArray(f.json.sites)) f.json.sites = [];
+    if (!isPlainObj(f.json.labels)) f.json.labels = { person: [], equipment: [], vehicle: [] };
+    state = f.json;
+    setSyncBase(f.rev, f.text, state.sites.length);
+    _syncedGen = _editGen;   // 上書きを選んだので、この端末の未送信の変更は送らない
+    _syncReady = true;
     resetUndo(); // 比べる基準は描画より先に取り直す（自動プルと同じ理由）
     _origSaveState(); // 取得だけの端末を最終更新者に刻まない＆再アップロードしない（自動プルと同じ挙動）
+    persistSyncMarker();
+    dbxShowSynced();
     render();
     alert('最新データを取得しました');
-  } else {
-    alert('Dropboxにデータがありません');
-  }
+  });
 }
 
-// 保存状態フラグ（閉じる時の警告とローカル定期保存に使用）
-let _dbxPending = false;
+// 保存状態フラグ（ローカル定期保存に使用）。クラウドへの未送信は dbxHasUnsent()（_editGen と _syncedGen の差）で見る
 let _localPending = false;
 
 function scheduleDbxAutoSave() {
   _localPending = true;
   if (!dbxToken) return;
-  _dbxPending = true;
   if (dbxAutoSaveTimer) clearTimeout(dbxAutoSaveTimer);
-  dbxAutoSaveTimer = setTimeout(() => { dbxSave(true); dbxAutoSaveTimer = null; }, 1000);
+  dbxAutoSaveTimer = setTimeout(() => { dbxAutoSaveTimer = null; syncNow(); }, 1000);
 }
 
 // Hook into saveState
@@ -8317,9 +9023,10 @@ saveState = function(forceSync) {
   const _snap = _undoSnapshot();
   const _dataChanged = !_undoHistory.length || _snap !== _undoHistory[_undoHistory.length - 1];
   const _needSync = _dataChanged || forceSync;
+  if (!_needSync && !dbxDirty()) _forceReplace = false; // 復元で中身が同じだった時に、次の編集の保存へ「置き換え」を持ち越さない
   if (_needSync) {
-    // _dbxPendingを保存処理の最初に立てて、pull競合（ローカル変更が直前のpullで上書きされる事故）を防ぐ
-    if (dbxToken) _dbxPending = true;
+    // 未送信の印（番号）は保存処理の最初に進める。取り込みの待ち時間にした編集を、取り込む側が見分けられるように
+    _editGen++;
     _localPending = true;
   }
   if (_dataChanged) {
@@ -8327,7 +9034,10 @@ saveState = function(forceSync) {
   }
   _historyOverride = null; // 復元で中身が同じだった時に、次の編集へ持ち越さない
   _origSaveState(); // localStorage へはいつでも保存する（この端末が見ていた週を覚えるため）
-  if (_needSync) scheduleDbxAutoSave();
+  if (_needSync) {
+    scheduleDbxAutoSave();
+    persistSyncMarker(); // 送れないまま閉じても、次に開いた時にクラウドの最新と合わせられるように
+  }
   recordUndo(_snap); // 計算済みスナップショットを渡して再走査を省く
   updateLastEditorLabel();
 };
@@ -8421,7 +9131,7 @@ setInterval(autoBackupToFolder, AUTO_BACKUP_INTERVAL_MS);
 // 閉じる時の警告（Dropbox同期未完了の場合）
 window.addEventListener('beforeunload', (e) => {
   flushSiteMemoText(); // 現場メモの書きかけも保存対象にする
-  if (_dbxPending) {
+  if (dbxHasUnsent()) {
     e.preventDefault();
     e.returnValue = 'まだクラウドに保存していない変更があります。閉じてもよろしいですか？';
     return e.returnValue;
@@ -8437,9 +9147,9 @@ window.addEventListener('beforeunload', (e) => {
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'hidden') {
     flushSiteMemoText(); // 現場メモの書きかけを先に確定させ、下の即時保存に乗せる
-    // 即座にDropbox保存
-    if (dbxToken && _dbxPending) {
-      if (dbxAutoSaveTimer) { clearTimeout(dbxAutoSaveTimer); dbxAutoSaveTimer = null; }
+    // 即座にDropbox保存。取り込み中のダウンロードは止めて、保存を先に出す（裏に回ると数秒で止まる端末があるため）
+    if (dbxHasUnsent()) {
+      if (_pullAbort) _pullAbort.abort();
       dbxSave(true);
     }
     // ローカルバックアップも試す
@@ -8447,8 +9157,9 @@ document.addEventListener('visibilitychange', () => {
     // 裏に回る＝もう編集していない。editing:false を一発打って他端末の「同時編集中」警告を残さない
     if (dbxToken) presenceBeat();
   } else if (document.visibilityState === 'visible') {
-    // 表に戻った時：他端末で更新されてないか即チェック
-    dbxAutoPullIfChanged();
+    // 表に戻った時：送れていない変更があれば先に送り、無ければ他端末で更新されてないか即チェック
+    if (dbxHasUnsent()) syncNow();
+    else dbxAutoPullIfChanged();
     // 在席も即更新（自分の心拍を打ち、他端末の一覧も取り直す）
     if (dbxToken) { presenceBeat(); presencePoll(); }
   }
@@ -8456,6 +9167,8 @@ document.addEventListener('visibilitychange', () => {
 
 // ウィンドウフォーカス時にも他端末更新をチェック（モニター切替など）
 window.addEventListener('focus', () => { dbxAutoPullIfChanged(); });
+// 電波が戻った時：送れていない変更があればすぐ送る
+window.addEventListener('online', () => { if (dbxHasUnsent()) syncNow(); else dbxAutoPullIfChanged(); });
 
 // 5秒ごとに他端末の更新を確認（iPad表示モニター用途で素早く反映）
 const DBX_POLL_INTERVAL_MS = 2 * 1000;
@@ -8644,17 +9357,8 @@ initNoteToolbar();
   const handled = await dbxHandleCallback();
   if (dbxToken) {
     await dbxEnsurePathRoot();
-    const remote = await dbxLoad();
-    if (remote) {
-      keepLocalView(remote); // 起動時も、この端末が最後に見ていた週で開く
-      state = remote;
-      resetUndo(); // 比べる基準は描画より先に取り直す（自動プルと同じ理由）
-      _origSaveState();
-      render();
-    } else {
-      // リモートが空 → ローカルの現在の状態を初回プッシュ
-      await dbxSave(false);
-    }
+    // 最初の取り込み（前回送れなかった変更があれば最新と合わせる。board.json が本当に無い時だけ、この端末の盤面で作る）
+    await runSyncExclusive(syncInitial);
     updateDbxUI();
     startPresence();
   }
