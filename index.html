@@ -2227,7 +2227,7 @@
       -webkit-print-color-adjust: exact !important;
       print-color-adjust: exact !important;
     }
-    .toolbar, .pool, .modal-bg, .note-toolbar, .pdf-viewer, .cl-toast { display: none !important; }
+    .toolbar, .pool, .modal-bg, .note-toolbar, .pdf-viewer, .cl-toast, .tk-pop-bg { display: none !important; }
     .site-drag-handle, .site-copy-handle, .day-copy-btn,
     .cell-copy-handle, .cell-reset-btn, .magnet .del, .site-memo-btn.empty { display: none !important; }
     /* 配布用の週間表なので「今日」の色付けは印刷しない */
@@ -2236,6 +2236,7 @@
     .cell.today { background: white !important; box-shadow: none !important; }
     /* 誕生日（個人の情報）は配布する週間表に載せない */
     .day-bday, .magnet .bday-cake { display: none !important; }
+    .magnet .tk-badge { display: none !important; }
     .site-memo-btn { font-size: 7.5px !important; padding: 1px 2px !important; margin-top: 1px !important; }
     .app { display: block !important; height: auto !important; }
     .main { display: block !important; overflow: visible !important; }
@@ -2282,6 +2283,44 @@
     }
     .magnet-list { gap: 2px !important; min-height: 14px !important; }
   }
+
+  /* 重機の点検（重機 点検票 juki-tenken）：今日の列・備考欄・プールの重機マグネットに付ける印と、ツールバーの集計 */
+  .tk-badge { display: inline-flex; align-items: center; justify-content: center; min-width: 15px; height: 15px; padding: 0 2px; border-radius: 3px; font-size: 10px; font-weight: 800; line-height: 1; flex-shrink: 0; box-sizing: border-box; }
+  .magnet .tk-badge { margin-right: 4px; }
+  .tk-badge[data-s="ok"] { background: #2e7d32; color: #fff; }
+  .tk-badge[data-s="ng"] { background: #c62828; color: #fff; }
+  .tk-badge[data-s="none"] { background: #fff; color: #8a6d00; border: 1px solid #b08900; font-size: 9px; }
+  .magnet[data-tk="ng"] { box-shadow: 0 0 0 2px #c62828; }
+  .tenken-chip { cursor: pointer; font-size: 12px; padding: 3px 8px; border-radius: 12px; background: #f1f5f1; color: #333; border: 1px solid #b8c7b8; white-space: nowrap; margin-left: 4px; }
+  .tenken-chip b { font-weight: 700; }
+  .tenken-chip .ok { color: #2e7d32; }
+  .tenken-chip .ng { color: #c62828; }
+  .tenken-chip .none { color: #8a6d00; }
+  .tenken-chip.has-ng { border-color: #c62828; background: #fdecec; }
+  .tk-pop-bg { position: fixed; inset: 0; background: rgba(0,0,0,0.35); z-index: 3000; display: none; align-items: flex-start; justify-content: center; padding: 40px 12px; overflow-y: auto; }
+  .tk-pop-bg.show { display: flex; }
+  .tk-pop { background: #fff; color: #222; border-radius: 10px; width: 100%; max-width: 560px; padding: 14px 18px; box-shadow: 0 8px 24px rgba(0,0,0,0.25); }
+  .tk-pop .tk-head { display: flex; justify-content: space-between; align-items: center; }
+  .tk-pop h2 { font-size: 17px; margin: 0; }
+  .tk-pop h3 { font-size: 14px; margin: 12px 0 4px; }
+  .tk-pop .tk-g-ng { color: #c62828; }
+  .tk-pop .tk-g-none { color: #8a6d00; }
+  .tk-pop .tk-g-ok { color: #2e7d32; }
+  .tk-pop ul { list-style: none; margin: 0; padding: 0; }
+  .tk-pop li { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 8px; padding: 5px 0; border-bottom: 1px dashed #e3e3e3; font-size: 13px; }
+  .tk-pop li .tk-site { color: #555; }
+  .tk-pop li .tk-when { color: #777; font-size: 12px; margin-left: auto; }
+  .tk-pop .tk-sum { font-size: 13px; margin: 8px 0; }
+  .tk-pop .tk-foot { font-size: 12px; color: #666; margin-top: 12px; }
+  .tk-pop .close-btn { border: 0; background: transparent; font-size: 24px; cursor: pointer; line-height: 1; }
+  .tk-pop li a.tk-rec { color: inherit; text-decoration: underline dotted; }
+  .tk-box { margin: 10px 0; padding: 10px 12px; border: 1px solid #d5dbd5; border-radius: 8px; background: #f7faf7; font-size: 13px; }
+  .tk-box .tk-box-h { font-weight: 700; margin-bottom: 4px; }
+  .tk-box .tk-box-s { display: flex; align-items: center; gap: 6px; }
+  .tk-box .tk-box-btns { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+  .tk-box .tk-btn { display: inline-block; padding: 7px 12px; border-radius: 6px; border: 1px solid #9aa5b1; background: #fff; color: #1f3b57; text-decoration: none; font-weight: 600; }
+  .tk-box .tk-btn.primary { background: #1f3b57; border-color: #1f3b57; color: #fff; }
+  .tk-box .tk-box-note { margin-top: 6px; font-size: 11px; color: #777; }
 </style>
 </head>
 <body>
@@ -2295,6 +2334,7 @@
     <button class="week-jump" onclick="nextWeek()" title="次週 (+7日)">▶▶</button>
     <span id="week-label" style="margin: 0 8px; font-weight: bold;"></span>
     <span id="active-filter-chip" class="active-filter-chip" onclick="setViewFilter('all')" style="display:none" title="タップで全体表示に戻す"></span>
+    <span id="tenken-chip" class="tenken-chip pc-only" onclick="openTenkenList()" style="display:none"></span>
     <!-- PC専用: 表示フィルタ・一覧・月別（従来どおりバーに直接表示。スマホでは非表示） -->
     <div class="filter-group pc-only" id="filter-group">
       <button data-filter="all" class="active" onclick="setViewFilter('all')">全体</button>
@@ -2403,6 +2443,7 @@
       <button class="save-btn" onclick="applyRename()">変更</button>
     </div>
     <div id="meta-info" class="meta-info" style="display:none"></div>
+    <div id="tenken-box" class="tk-box" style="display:none"></div>
     <div id="kind-toggle-wrap" style="display:none">
       <div class="kind-toggle">
         <button id="kind-jp" onclick="setLabelKind('jp')">日本人</button>
@@ -2508,6 +2549,13 @@
   <button type="button" id="nt-close" class="nt-close" title="ツールバーを閉じる">×</button>
 </div>
 
+<div id="tenken-pop" class="tk-pop-bg" onclick="if (event.target === this) closeTenkenList()">
+  <div class="tk-pop">
+    <div class="tk-head"><h2>今日の重機点検</h2><button class="close-btn" onclick="closeTenkenList()">×</button></div>
+    <div id="tenken-list"></div>
+  </div>
+</div>
+
 <div id="settings-modal" class="modal-bg settings-modal">
   <div class="modal">
     <div class="modal-header">
@@ -2553,6 +2601,21 @@
         <input type="text" id="device-name-input" placeholder="例：事務所PC" maxlength="24" style="flex:1;" />
         <button class="primary" onclick="saveDeviceName()">保存</button>
       </div>
+    </div>
+
+    <div class="settings-section">
+      <h3>重機の点検（QR点検票）</h3>
+      <p>重機に貼ったQRコードの点検票（<a href="https://takahiro-koizumi.github.io/juki-tenken/" target="_blank" rel="noopener">重機 点検票</a>）とつなぐと、
+        今日の列・備考欄・プールの重機マグネットに「<b style="color:#2e7d32">✓</b> 点検済み／<b style="color:#c62828">×</b> 不良あり／<b style="color:#8a6d00">未</b> まだ」が付き、
+        ツールバーに今日の集計が出ます。<br>
+        点検票の管理画面の「設定」タブ →「点検の入口」の URL（または重機の QR コードの URL）を貼って「つなぐ」を押してください。
+        この設定はこの端末だけに保存されます（点検票の管理画面にログインしたことがある端末は自動でつながります）。ボードの中身は変わりません。</p>
+      <div class="settings-row">
+        <input type="text" id="tenken-key-input" placeholder="https://takahiro-koizumi.github.io/juki-tenken/?k=…" style="flex:1;" />
+        <button class="primary" onclick="saveTenkenKey()">つなぐ</button>
+        <button class="danger" onclick="clearTenkenKey()">外す</button>
+      </div>
+      <div id="tenken-info" class="last-sync"></div>
     </div>
 
     <div class="settings-section">
@@ -3877,6 +3940,8 @@ function markToday() {
   });
   // プールの誕生日は「今日」で光らせているので、表示したまま日付が変わったら付け直す
   document.querySelectorAll('#pool-items .magnet').forEach(el => applyBirthdayGlow(el, t));
+  // 重機の点検の印・集計も今日に合わせる（日付が変わった時・描き直した時）
+  tenkenRefreshAll();
 }
 setInterval(() => { if (todayStr() !== _todayMarked) markToday(); }, 60 * 1000);
 
@@ -4006,6 +4071,7 @@ function renderPool() {
     applyMagnetColor(el, activeTab, label);
     // プールには日付が無いので「今日」で判定する（マスに置いたら onMagnetAdd でその列の日付に付け直す）
     applyBirthdayGlow(el, todayStr());
+    applyTenkenBadge(el, todayStr());
     el.addEventListener('click', (e) => {
       if (e.target.classList.contains('del')) return;
       if (Sortable.active) return;
@@ -4140,6 +4206,8 @@ function onMagnetAdd(evt) {
   const dateStr = toList.dataset.date;
   // 誕生日の光り方は置いた先の列の日付で付け直す（プールから来たものは「今日」、別の日のマスから来たものは元の日で判定されている）
   applyBirthdayGlow(item, dateStr);
+  applyTenkenBadge(item, dateStr);  // 点検の印も置いた先の列で付け直す（今日・備考以外の列では外す）
+  tenkenRefreshSoon();              // ツールバーの集計（置き場所が変わった）
   const dup = findDuplicateOnDay(dateStr, item.dataset.type, item.dataset.label, item);
   if (dup) {
     const dupSite = state.sites.find(s => s.id === dup.siteId);
@@ -4170,6 +4238,7 @@ function syncFromDom(list) {
   readCellFromDom(list.dataset.siteId, list.dataset.date);
   saveState();
   updateHeadcounts();
+  tenkenRefreshSoon(); // 重機の点検の印・集計（人を置いた・外した、重機を外した時も「未」の出方が変わる）
 }
 
 function updateHeadcounts() {
@@ -5550,7 +5619,7 @@ function applyMagnetColor(el, type, label) {
 // 閲覧モードで見せる中身があるか（無いなら空のダイアログを開かない）
 function hasViewOnlyInfo(type, label) {
   if (type === 'person') return true;   // 区分・所属・資格が必ず出る
-  if (type === 'equipment') return !!EQUIPMENT_META[label];
+  if (type === 'equipment') return !!EQUIPMENT_META[label] || !!tenkenStatusOf(label);
   if (type === 'vehicle') return !!VEHICLE_META[label];
   return false;
 }
@@ -5624,6 +5693,7 @@ function openColorPicker(type, label, viewOnly) {
     metaWrap.style.display = 'none';
     metaWrap.innerHTML = '';
   }
+  renderTenkenBox(type, label); // 重機の点検（今日の状況と、記録・点検票を開くボタン）
 
   // Kind toggle (person only)
   const kindWrap = document.getElementById('kind-toggle-wrap');
@@ -6507,6 +6577,13 @@ document.getElementById('help-modal').addEventListener('click', (e) => {
 // id はこの端末で「どこまで見たか」の目印なので、重複させない・後から変えない。
 // tag は 新機能 / 改善 / 修正 / お知らせ。文は現場の人が読んで分かる言葉で書く（中の仕組みの話は書かない）。
 const CHANGELOG = [
+  { id: '2026-11-12-juki-tenken', date: '2026-11-12', tag: '新機能', title: '重機マグネットに今日の点検（QR点検票）が出るように',
+    items: [
+      '重機に貼ったQRコードの点検票（スマホで入力）とつなぐと、今日の列・備考欄・プールの重機マグネットに「✓（点検済み）」「×（不良あり）」「未（まだ）」の印が付きます。「未」は、今日の列に置いた重機と、今日だれかが入っている工事の現場の備考欄（常駐）の重機だけに出ます。',
+      'ツールバーの「🔧点検 ✓○ ×○ 未○」を押すと、今日の列と備考欄に置いた重機の点検状況が、現場名と時刻つきの一覧で出ます。',
+      '重機のマグネットを押すと、今日の点検の状況と「点検の記録を見る」「点検票を開く」のボタンが出ます。記録は点検票の管理画面（Google でログインできる人）で、今日の点検の中身とその重機の月の点検表が開きます。',
+      'つなぎ方：⚙ 設定の「重機の点検（QR点検票）」に点検票の URL を貼って「つなぐ」。端末ごとの設定です（点検票の管理画面にログインしたことのある端末は自動でつながります）。印刷・PDF には出ません。',
+    ] },
   { id: '2026-10-29-sync-merge', date: '2026-10-29', tag: '修正', title: '他の端末の変更を取り込む瞬間に置いたマグネットが消えることがあったのを修正',
     items: [
       '他の端末の変更を取り込んでいる最中（1〜2秒）に置いた・外したマグネットや書いたメモが、取り込んだ盤面で上書きされて消えることがありました。今は両方の変更を合わせて残します。',
@@ -7419,6 +7496,7 @@ function openSettings() {
   updateBackupDirUI();
   document.getElementById('note-toolbar-toggle').checked = noteToolbarEnabled;
   document.getElementById('device-name-input').value = deviceName;
+  updateTenkenInfo();
   updateBirthdayCount();
   document.getElementById('settings-modal').classList.add('show');
 }
@@ -9326,10 +9404,331 @@ function presenceLeave(useKeepalive) {
 }
 window.addEventListener('pagehide', () => presenceLeave(true));
 
+// ========== 重機の点検（重機 点検票 juki-tenken）との連携 ==========
+// 今日の列・備考欄・プールの重機マグネットに「✓ 点検済み／× 不良あり／未 まだ」を付ける。ツールバーに今日の集計。
+// - 点検票の会社の合言葉（QRコードの k=）をこの端末に覚える（localStorage genba_tenken_key）。
+//   同じ住所（takahiro-koizumi.github.io）で点検票の管理画面にログインしたことがある端末は、その合言葉（jt_admin_tk）を自動で使う。
+//   「外す」を押した端末は genba_tenken_off で自動を止める
+// - Firestore（genba-board-50494）の tenken/{合言葉}（重機の一覧）と tenken/{合言葉}/last/{重機ID}（最後の点検）を見張って読むだけ。
+//   ボードの保存・同期（board.json）には一切関わらない。印は描くたびに付け直す（マグネットの名前は data-label から読むので保存内容は変わらない）
+const TENKEN_FIREBASE = {
+  apiKey: 'AIzaSyC4UmnWEBxo5rZk1ENlYyIisdFqJFfqR2A',
+  authDomain: 'genba-board-50494.firebaseapp.com',
+  projectId: 'genba-board-50494',
+  storageBucket: 'genba-board-50494.firebasestorage.app',
+  messagingSenderId: '637215520596',
+  appId: '1:637215520596:web:20fbbe7750fc4f980bfac1',
+};
+const TENKEN_SDK = 'https://www.gstatic.com/firebasejs/10.12.2/';
+const TENKEN_APP_URL = 'https://takahiro-koizumi.github.io/juki-tenken/';
+const TENKEN_CIRCLED = '①②③④⑤⑥⑦⑧⑨⑩⑪⑫⑬⑭⑮⑯⑰⑱⑲⑳㉑㉒㉓㉔㉕㉖㉗㉘㉙㉚㉛㉜㉝㉞㉟㊱㊲㊳㊴㊵㊶㊷㊸㊹㊺㊻㊼㊽㊾㊿';
+// status: off（つないでいない）/ loading / ok / error
+const Tenken = { key: '', status: 'off', err: '', co: null, last: {}, F: null, db: null, coUnsub: null, lastUnsubs: new Map(), gen: 0 };
+
+function tenkenKeyFromStorage() {
+  try {
+    if (localStorage.getItem('genba_tenken_off') === '1') return '';
+    const k = localStorage.getItem('genba_tenken_key');
+    if (k && /^[A-Za-z0-9]{6,40}$/.test(k)) return k;
+    const a = localStorage.getItem('jt_admin_tk'); // 点検票の管理画面（同じ住所）がこの端末に覚えた合言葉
+    if (a) { const v = JSON.parse(a); if (typeof v === 'string' && /^[A-Za-z0-9]{6,40}$/.test(v)) return v; }
+  } catch (e) { /* 読めなければつながない */ }
+  return '';
+}
+// 点検票の URL（?k=… を含むもの）か合言葉そのものから、合言葉を取り出す
+function parseTenkenKey(text) {
+  const s = String(text || '').trim();
+  const m = s.match(/[?&]k=([A-Za-z0-9]{6,40})(?:&|#|$)/);
+  if (m) return m[1];
+  return /^[A-Za-z0-9]{6,40}$/.test(s) ? s : '';
+}
+
+function tenkenStop() {
+  Tenken.gen++;
+  if (Tenken.coUnsub) { try { Tenken.coUnsub(); } catch (e) {} Tenken.coUnsub = null; }
+  Tenken.lastUnsubs.forEach(un => { try { un(); } catch (e) {} });
+  Tenken.lastUnsubs.clear();
+  Tenken.co = null; Tenken.last = {}; Tenken.status = 'off'; Tenken.err = '';
+}
+
+async function tenkenStart() {
+  tenkenStop();
+  const key = tenkenKeyFromStorage();
+  Tenken.key = key;
+  const gen = Tenken.gen;
+  if (!key) { tenkenRefreshAll(); updateTenkenInfo(); return; }
+  Tenken.status = 'loading'; updateTenkenInfo();
+  try {
+    if (!Tenken.F) {
+      const [app, fs] = await Promise.all([import(TENKEN_SDK + 'firebase-app.js'), import(TENKEN_SDK + 'firebase-firestore.js')]);
+      if (!Tenken.F) {
+        Tenken.F = fs;
+        Tenken.db = fs.getFirestore(app.initializeApp(TENKEN_FIREBASE, 'juki-tenken'));
+      }
+    }
+  } catch (e) {
+    if (gen !== Tenken.gen) return;
+    Tenken.status = 'error'; Tenken.err = '点検票の部品を読み込めませんでした（ネットを確認して開き直してください）';
+    tenkenRefreshAll(); updateTenkenInfo(); return;
+  }
+  if (gen !== Tenken.gen) return; // 読み込み中に「外す」「つなぐ」が押された
+  const F = Tenken.F, db = Tenken.db;
+  Tenken.coUnsub = F.onSnapshot(F.doc(db, 'tenken', key), (snap) => {
+    if (gen !== Tenken.gen) return;
+    if (!snap.exists()) {
+      if (snap.metadata && snap.metadata.fromCache) return; // 圏外で起動した時の「無い」はサーバーの答えではない（つながるのを待つ）
+      Tenken.status = 'error'; Tenken.err = '点検票の会社が見つかりません（合言葉が違う・古い）'; Tenken.co = null;
+    } else {
+      const d = snap.data();
+      Tenken.co = { name: d.name || '', machines: Array.isArray(d.machines) ? d.machines : [] };
+      Tenken.status = 'ok'; Tenken.err = '';
+      tenkenWatchLast(gen);
+    }
+    tenkenRefreshAll(); updateTenkenInfo();
+  }, (e) => {
+    if (gen !== Tenken.gen) return;
+    Tenken.status = 'error'; Tenken.err = '点検票を読めませんでした（' + ((e && e.code) || 'error') + '）';
+    tenkenRefreshAll(); updateTenkenInfo();
+  });
+}
+
+// 重機ごとの「最後の点検」を見張る（使用中の重機だけ。一覧が変わったら付け外し）
+function tenkenWatchLast(gen) {
+  const F = Tenken.F, db = Tenken.db, key = Tenken.key;
+  const want = new Set(Tenken.co.machines.filter(m => m && m.id && !m.off).map(m => m.id));
+  Tenken.lastUnsubs.forEach((un, mid) => {
+    if (!want.has(mid)) { try { un(); } catch (e) {} Tenken.lastUnsubs.delete(mid); delete Tenken.last[mid]; }
+  });
+  want.forEach(mid => {
+    if (Tenken.lastUnsubs.has(mid)) return;
+    Tenken.lastUnsubs.set(mid, F.onSnapshot(F.doc(db, 'tenken', key, 'last', mid), (snap) => {
+      if (gen !== Tenken.gen) return;
+      if (snap.exists()) { const d = snap.data(); Tenken.last[mid] = { date: String(d.date || ''), t: String(d.t || ''), ng: !!d.ng }; }
+      else delete Tenken.last[mid];
+      tenkenRefreshSoon();
+    }, () => { /* 1台読めなくても他は出す */ }));
+  });
+}
+
+// ボードの重機の名前 → 点検票の重機（名前が同じもの＝空白の全角・半角・有無は見ない。無ければ丸数字の No. で n○）。使用停止は出さない
+function tenkenNameKey(s) { return String(s || '').replace(/[\s　]+/g, ''); }
+function tenkenMachineOf(label) {
+  if (!Tenken.co) return null;
+  const ms = Tenken.co.machines;
+  const key = tenkenNameKey(label);
+  if (!key) return null;
+  // 使用停止の重機は探さない（売却した重機の丸数字を後の重機に使い回した時、新しい方に印が付くように）
+  let m = ms.find(x => x && !x.off && tenkenNameKey(x.label) === key);
+  if (!m) {
+    const i = TENKEN_CIRCLED.indexOf(key.charAt(0));
+    if (i >= 0) m = ms.find(x => x && !x.off && x.id === 'n' + (i + 1));
+  }
+  return m || null;
+}
+// その重機の今日の点検：{ s: 'ok'|'ng'|'none', t, prev } か null（つないでいない・点検票に無い重機）
+function tenkenStatusOf(label) {
+  if (Tenken.status !== 'ok') return null;
+  const m = tenkenMachineOf(label);
+  if (!m) return null;
+  const l = Tenken.last[m.id];
+  if (l && l.date === todayStr()) return { s: l.ng ? 'ng' : 'ok', t: l.t, m };
+  return { s: 'none', prev: l || null, m };
+}
+function tenkenMdText(dateStr) { const p = String(dateStr || '').split('-'); return p.length === 3 ? Number(p[1]) + '/' + Number(p[2]) : dateStr; }
+function tenkenStatusText(st) {
+  if (st.s === 'ok') return '今日 ' + st.t + ' 点検済み（異常なし）';
+  if (st.s === 'ng') return '今日 ' + st.t + ' の点検で「×」あり';
+  return '今日はまだ点検していません' + (st.prev ? '（前回 ' + tenkenMdText(st.prev.date) + ' ' + st.prev.t + (st.prev.ng ? ' ×あり' : '') + '）' : '');
+}
+
+// その現場に今日だれか（人・協力業者）が入っているか
+function tenkenSiteWorkingToday(site) {
+  const c = state.schedule && state.schedule[site.id] && state.schedule[site.id][todayStr()];
+  return !!(c && Array.isArray(c.magnets) && c.magnets.some(m => m && m.type === 'person'));
+}
+// その場所の重機は今日点検が要るか（＝「未」を出すか）。
+// 工事の現場（見出しの「○現場」に数える現場）の、今日の列に置いた重機、または今日だれかが入っている現場の備考欄（常駐）の重機。
+// 置場・事務所・休み研修、だれも入っていない日（日曜・休工）の備考欄は、使っていない重機まで「未」になるので出さない
+function tenkenNeedsCheck(site, dateStr) {
+  if (!site || !isWorkSite(site)) return false;
+  return dateStr !== '__note__' || tenkenSiteWorkingToday(site);
+}
+function tenkenNeedsCheckEl(el, dateStr) {
+  const list = el.closest('.magnet-list');
+  return tenkenNeedsCheck(list && state.sites.find(x => x.id === list.dataset.siteId), dateStr);
+}
+// マグネットの印を、その列の日付に合わせて付け外しする（今日の列・備考欄・プールだけ。ほかの日は付けない）。
+// 「未」は今日点検が要る所の重機だけ（tenkenNeedsCheck。プールは ✓・× だけ）。
+// 描いた直後はまだマスに入っていないので、renderGrid の終わり（markToday → tenkenRefreshAll）で付け直す
+function applyTenkenBadge(el, dateStr) {
+  let b = el.querySelector(':scope > .tk-badge');
+  let st = (el.dataset.type === 'equipment' && (dateStr === todayStr() || dateStr === '__note__')) ? tenkenStatusOf(el.dataset.label) : null;
+  if (st && st.s === 'none' && !tenkenNeedsCheckEl(el, dateStr)) st = null;
+  if (!st) {
+    if (b) b.remove();
+    delete el.dataset.tk;
+    return;
+  }
+  if (!b) {
+    b = document.createElement('span');
+    b.className = 'tk-badge';
+    el.insertBefore(b, el.firstChild);
+  }
+  b.dataset.s = st.s;
+  b.textContent = st.s === 'ok' ? '✓' : st.s === 'ng' ? '×' : '未';
+  b.title = tenkenStatusText(st);
+  el.dataset.tk = st.s;
+}
+
+let _tenkenRefreshTimer = 0;
+function tenkenRefreshSoon() { clearTimeout(_tenkenRefreshTimer); _tenkenRefreshTimer = setTimeout(tenkenRefreshAll, 250); }
+function tenkenRefreshAll() {
+  const today = todayStr();
+  document.querySelectorAll('.magnet[data-type="equipment"]').forEach(el => {
+    const list = el.closest('.magnet-list');
+    if (list) applyTenkenBadge(el, list.dataset.date);
+    else if (el.closest('#pool-items')) applyTenkenBadge(el, today);
+  });
+  updateTenkenChip();
+  if (document.getElementById('tenken-pop').classList.contains('show')) renderTenkenList();
+  const box = document.getElementById('tenken-box');
+  if (box && box.dataset.label && document.getElementById('color-modal').classList.contains('show')
+      && colorPickerTarget && colorPickerTarget.type === 'equipment' && colorPickerTarget.label === box.dataset.label) {
+    renderTenkenBox('equipment', box.dataset.label);
+  }
+}
+// 読めなかった時（部品の読み込み失敗・見張りのエラー）は、電波が戻った時・画面に戻った時にやり直す（一日中開いている iPad のため）
+window.addEventListener('online', () => { if (Tenken.status === 'error' && tenkenKeyFromStorage()) tenkenStart(); });
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && Tenken.status === 'error' && tenkenKeyFromStorage()) tenkenStart();
+});
+// 日付が変わった・配置が変わった時のため、1分ごとに付け直す（見張りは変更があった時だけ知らせてくるので）
+setInterval(() => { if (Tenken.status === 'ok' && document.visibilityState === 'visible') tenkenRefreshAll(); }, 60 * 1000);
+
+// 今日の列と備考欄（完了にした現場を除く）に置かれている重機 → [{ name: 現場名, need: 今日点検が要る所か }]
+function tenkenPlacedToday() {
+  const today = todayStr();
+  const out = new Map();
+  (state.sites || []).forEach(site => {
+    if (site.archived) return;
+    const sch = state.schedule && state.schedule[site.id];
+    if (!sch) return;
+    [today, '__note__'].forEach(d => {
+      const cell = sch[d];
+      if (!cell || !Array.isArray(cell.magnets)) return;
+      cell.magnets.forEach(mg => {
+        if (!mg || mg.type !== 'equipment') return;
+        const arr = out.get(mg.label) || [];
+        const need = tenkenNeedsCheck(site, d);
+        const ex = arr.find(x => x.name === site.name);
+        if (ex) ex.need = ex.need || need; else arr.push({ name: site.name, need });
+        out.set(mg.label, arr);
+      });
+    });
+  });
+  return out;
+}
+function tenkenSummary() {
+  const rows = [];
+  tenkenPlacedToday().forEach((places, label) => {
+    const st = tenkenStatusOf(label);
+    if (!st) return;
+    // 「まだ」は今日点検が要る所の重機だけ数える（置場・事務所・休み研修・だれも入っていない現場にあるだけの重機は使っていないので）
+    if (st.s === 'none' && !places.some(x => x.need)) return;
+    rows.push({ label, sites: places.map(x => x.name), st });
+  });
+  const n = { ok: 0, ng: 0, none: 0 };
+  rows.forEach(r => { n[r.st.s]++; });
+  return { rows, n };
+}
+function updateTenkenChip() {
+  const chip = document.getElementById('tenken-chip');
+  if (!chip) return;
+  if (Tenken.status !== 'ok') { chip.style.display = 'none'; return; }
+  const { n } = tenkenSummary();
+  chip.innerHTML = '🔧点検 <b class="ok">✓' + n.ok + '</b>' + (n.ng ? ' <b class="ng">×' + n.ng + '</b>' : '') + ' <b class="none">未' + n.none + '</b>';
+  chip.classList.toggle('has-ng', n.ng > 0);
+  chip.title = '今日の列と備考欄に置いた重機の点検（「未」は今日だれかが入っている工事の現場の重機だけ。タップで一覧）';
+  chip.style.display = '';
+}
+
+// 点検票の管理画面で、その重機の記録（今日の点検の中身と月の点検表）を開く URL。
+// 管理画面の窓は名前を付けて使い回す（押すたびに窓が増えないように。#m= が変わると管理画面がその重機に切り替える）
+function tenkenRecordUrl(m) { return TENKEN_APP_URL + '#m=' + encodeURIComponent(m.id); }
+// 作業員がスマホで入力する点検票（QR コードと同じ URL）
+function tenkenFormUrl(m) { return TENKEN_APP_URL + '?k=' + encodeURIComponent(Tenken.key) + '&m=' + encodeURIComponent(m.id); }
+const TENKEN_ADMIN_WINDOW = 'juki-tenken-admin';
+
+// マグネットを押した時の情報画面の「重機の点検」欄
+function renderTenkenBox(type, label) {
+  const box = document.getElementById('tenken-box');
+  if (!box) return;
+  const st = type === 'equipment' ? tenkenStatusOf(label) : null;
+  if (!st) { box.style.display = 'none'; box.innerHTML = ''; box.dataset.label = ''; return; }
+  const sym = st.s === 'ok' ? '✓' : st.s === 'ng' ? '×' : '未';
+  box.dataset.label = label;
+  box.innerHTML = '<div class="tk-box-h">重機の点検</div>'
+    + '<div class="tk-box-s"><span class="tk-badge" data-s="' + st.s + '">' + sym + '</span><span>' + escapeHtml(tenkenStatusText(st)) + '</span></div>'
+    + '<div class="tk-box-btns">'
+    + '<a class="tk-btn primary" href="' + escapeHtml(tenkenRecordUrl(st.m)) + '" target="' + TENKEN_ADMIN_WINDOW + '">点検の記録を見る</a>'
+    + '<a class="tk-btn" href="' + escapeHtml(tenkenFormUrl(st.m)) + '" target="_blank" rel="noopener">点検票を開く（入力）</a>'
+    + '</div>'
+    + '<div class="tk-box-note">「点検の記録を見る」は点検票の管理画面で開きます（Google でログインできる人だけ。今日の記録の中身と、その重機の月の点検表が出ます）。</div>';
+  box.style.display = '';
+}
+
+// ツールバーの集計をタップ → 今日の点検の一覧
+function openTenkenList() { document.getElementById('tenken-pop').classList.add('show'); renderTenkenList(); }
+function closeTenkenList() { document.getElementById('tenken-pop').classList.remove('show'); }
+function renderTenkenList() {
+  const box = document.getElementById('tenken-list');
+  if (!box) return;
+  if (Tenken.status !== 'ok') { box.innerHTML = '<p>点検票とつながっていません。⚙ 設定の「重機の点検（QR点検票）」でつないでください。</p>'; return; }
+  const { rows, n } = tenkenSummary();
+  const order = { ng: 0, none: 1, ok: 2 };
+  const mo = (r) => { const i = Tenken.co.machines.indexOf(r.st.m); return i < 0 ? 9999 : i; }; // 点検票の重機の並び（No. 順）
+  rows.sort((a, b) => order[a.st.s] - order[b.st.s] || mo(a) - mo(b));
+  const group = (s, title) => {
+    const rs = rows.filter(r => r.st.s === s);
+    if (!rs.length) return '';
+    return '<h3 class="tk-g-' + s + '">' + title + '（' + rs.length + '台）</h3><ul>' + rs.map(r =>
+      '<li><span class="tk-badge" data-s="' + s + '">' + (s === 'ok' ? '✓' : s === 'ng' ? '×' : '未') + '</span><b><a class="tk-rec" href="' + escapeHtml(tenkenRecordUrl(r.st.m)) + '" target="' + TENKEN_ADMIN_WINDOW + '" title="点検の記録を見る">' + escapeHtml(r.label) + '</a></b>'
+      + '<span class="tk-site">' + escapeHtml(r.sites.join('、')) + '</span><span class="tk-when">' + escapeHtml(tenkenStatusText(r.st)) + '</span></li>').join('') + '</ul>';
+  };
+  box.innerHTML = '<p class="tk-sum">今日（' + escapeHtml(tenkenMdText(todayStr())) + '）の列と備考欄に置いた重機：点検済み ' + n.ok + '台・不良あり ' + n.ng + '台・まだ ' + n.none + '台<br><span style="color:#777;font-size:12px">「まだ」は、今日の列に置いた重機と、今日だれかが入っている工事の現場の備考欄の重機だけです（置場・事務所・休み研修・だれも入っていない現場の重機は数えません）。</span></p>'
+    + (rows.length ? group('ng', '「×」あり（使わないで確認）') + group('none', 'まだ点検していない') + group('ok', '点検済み（異常なし）') : '<p>今日の列と備考欄に、点検票に登録された重機がありません。</p>')
+    + '<p class="tk-foot">重機の名前を押すと、点検票の管理画面でその重機の記録（今日の点検の中身と月の点検表）が開きます。</p>';
+}
+
+// ⚙ 設定の「重機の点検（QR点検票）」
+function updateTenkenInfo() {
+  const info = document.getElementById('tenken-info');
+  if (!info) return;
+  const off = (() => { try { return localStorage.getItem('genba_tenken_off') === '1'; } catch (e) { return false; } })();
+  if (Tenken.status === 'ok') info.textContent = 'つながっています：' + (Tenken.co.name || '') + '（重機 ' + Tenken.co.machines.filter(m => m && !m.off).length + ' 台）';
+  else if (Tenken.status === 'loading') info.textContent = 'つないでいます…';
+  else if (Tenken.status === 'error') info.textContent = '⚠ ' + Tenken.err;
+  else info.textContent = off ? 'この端末では外しています（つなぐと表示します）' : 'まだつないでいません';
+}
+function saveTenkenKey() {
+  const input = document.getElementById('tenken-key-input');
+  const k = parseTenkenKey(input.value);
+  if (!k) { alert('点検票の URL（…/juki-tenken/?k=… の形）を貼ってください。\n点検票の管理画面の「設定」タブ→「点検の入口」の URL、または重機の QR コードの URL です。'); return; }
+  try { localStorage.setItem('genba_tenken_key', k); localStorage.removeItem('genba_tenken_off'); } catch (e) { alert('この端末に保存できませんでした'); return; }
+  input.value = '';
+  tenkenStart();
+}
+function clearTenkenKey() {
+  if (!confirm('この端末で、重機の点検の表示をやめますか？\n（ほかの端末やボードの中身は変わりません。もう一度つなぐこともできます）')) return;
+  try { localStorage.removeItem('genba_tenken_key'); localStorage.setItem('genba_tenken_off', '1'); } catch (e) { /* なにもしない */ }
+  tenkenStop(); tenkenRefreshAll(); updateTenkenInfo();
+}
+
 // ========== Init ==========
 render();
 updateDbxUI();
 initNoteToolbar();
+tenkenStart();
 (async function init() {
   // 旧App Keyからのアップグレード: App Keyが変わったら古いtokenは無効なのでクリア
   const previousAppKey = localStorage.getItem('dbx_app_key');
